@@ -1345,6 +1345,53 @@ pragma solidity ^0.8.10;
 
 
 
+library TokenOperation {
+    using Address for address;
+
+    function safeMint(
+        address token,
+        address to,
+        uint256 value
+    ) internal {
+        // mint(address,uint256)
+        _callOptionalReturn(token, abi.encodeWithSelector(0x40c10f19, to, value));
+    }
+
+    function safeBurnAny(
+        address token,
+        address from,
+        uint256 value
+    ) internal {
+        // burn(address,uint256)
+        _callOptionalReturn(token, abi.encodeWithSelector(0x9dc29fac, from, value));
+    }
+
+    function safeBurnSelf(
+        address token,
+        uint256 value
+    ) internal {
+        // burn(uint256)
+        _callOptionalReturn(token, abi.encodeWithSelector(0x42966c68, msg.sender, value));
+    }
+
+    function safeBurnFrom(
+        address token,
+        address from,
+        uint256 value
+    ) internal {
+        // burnFrom(address,uint256)
+        _callOptionalReturn(token, abi.encodeWithSelector(0x79cc6790, from, value));
+    }
+
+    function _callOptionalReturn(address token, bytes memory data) private {
+        bytes memory returndata = token.functionCall(data, "TokenOperation: low-level call failed");
+        if (returndata.length > 0) {
+            // Return data is optional
+            require(abi.decode(returndata, (bool)), "TokenOperation: did not succeed");
+        }
+    }
+}
+
 interface IBridge {
     function Swapin(bytes32 txhash, address account, uint256 amount) external returns (bool);
     function Swapout(uint256 amount, address bindaddr) external returns (bool);
@@ -1374,12 +1421,21 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     bool public mintPaused; // pause all mint calling
     bool public burnPaused; // pause all burn calling
 
-    address public token; // the target token this contract is wrapping
-    bool public tokenHasMintBurn; // how mint/burn is actually implemented
+    enum TokenType {
+        MintBurnAny,  // mint and burn(address from, uint256 amount), don't need approve
+        MintBurnFrom, // mint and burnFrom(address from, uint256 amount), need approve
+        MintBurnSelf, // mint and burn(uint256 amount), call transferFrom first, need approve
+        Transfer      // transfer and transferFrom, need approve
+    }
 
-    constructor(address _token, bool _tokenHasMintBurn, address _admin) {
+    address public immutable token; // the target token this contract is wrapping
+    TokenType public immutable tokenType;
+
+    constructor(address _token, TokenType _tokenType, address _admin) {
+        require(_token != address(0), "zero token address");
+        require(_admin != address(0), "zero admin address");
         token = _token;
-        tokenHasMintBurn = _tokenHasMintBurn;
+        tokenType = _tokenType;
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
@@ -1395,10 +1451,10 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         s.total += amount;
         require(s.total <= s.cap, "minter cap exceeded");
 
-        if (tokenHasMintBurn) {
-            IRouter(token).mint(to, amount);
-        } else {
+        if (tokenType == TokenType.Transfer) {
             IERC20(token).safeTransfer(to, amount);
+        } else {
+            TokenOperation.safeMint(token, to, amount);
         }
     }
 
@@ -1408,10 +1464,15 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         Supply storage s = minterSupply[msg.sender];
         s.total -= amount;
 
-        if (tokenHasMintBurn) {
-            IRouter(token).burn(from, amount);
-        } else {
+        if (tokenType == TokenType.Transfer) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
+        } else if (tokenType == TokenType.MintBurnAny) {
+            TokenOperation.safeBurnAny(token, from, amount);
+        } else if (tokenType == TokenType.MintBurnFrom) {
+            TokenOperation.safeBurnFrom(token, from, amount);
+        } else if (tokenType == TokenType.MintBurnSelf) {
+            IERC20(token).safeTransferFrom(from, address(this), amount);
+            TokenOperation.safeBurnSelf(token, amount);
         }
     }
 
