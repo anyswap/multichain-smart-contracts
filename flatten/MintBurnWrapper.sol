@@ -1464,7 +1464,7 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         require(from != address(this), "forbid burn from address(this)");
         require(!allBurnPaused && !burnPaused[msg.sender], "burn paused");
         Supply storage s = minterSupply[msg.sender];
-        require(s.total <= amount, "burn amount exceeded");
+        require(s.total >= amount, "minter burn amount exceeded");
         s.total -= amount;
 
         if (tokenType == TokenType.Transfer) {
@@ -1506,16 +1506,18 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         return true;
     }
 
-    function addMinter(address minter, uint256 cap, uint256 max, uint256 total) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addMinter(address minter, uint256 cap, uint256 max) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _grantRole(MINTER_ROLE, minter);
         minterSupply[minter].cap = cap;
         minterSupply[minter].max = max;
-        minterSupply[minter].total = total;
+        mintPaused[minter] = false;
+        burnPaused[minter] = false;
     }
 
     function removeMinter(address minter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _revokeRole(MINTER_ROLE, minter);
-        delete minterSupply[minter];
+        minterSupply[minter].cap = 0;
+        minterSupply[minter].max = 0;
     }
 
     function setMinterCap(address minter, uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -1529,7 +1531,6 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     }
 
     function setMinterTotal(address minter, uint256 total) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(hasRole(MINTER_ROLE, minter), "not minter");
         minterSupply[minter].total = total;
     }
 
