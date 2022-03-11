@@ -79,6 +79,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     mapping(address => Supply) public minterSupply;
+    uint256 public totalMintCap; // total mint cap
+    uint256 public totalMinted; // total minted amount
 
     enum TokenType {
         MintBurnAny,  // mint and burn(address from, uint256 amount), don't need approve
@@ -95,11 +97,12 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     mapping(address => bool) public mintPaused; // pause specify minters' mint calling
     mapping(address => bool) public burnPaused; // pause specify minters' burn calling
 
-    constructor(address _token, TokenType _tokenType, address _admin) {
+    constructor(address _token, TokenType _tokenType, uint256 _totalMintCap, address _admin) {
         require(_token != address(0), "zero token address");
         require(_admin != address(0), "zero admin address");
         token = _token;
         tokenType = _tokenType;
+        totalMintCap = _totalMintCap;
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
@@ -114,6 +117,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         require(amount <= s.max, "minter max exceeded");
         s.total += amount;
         require(s.total <= s.cap, "minter cap exceeded");
+        totalMinted += amount;
+        require(totalMinted <= totalMintCap, "total mint cap exceeded");
 
         if (tokenType == TokenType.Transfer) {
             IERC20(token).safeTransfer(to, amount);
@@ -128,6 +133,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         Supply storage s = minterSupply[msg.sender];
         require(s.total >= amount, "minter burn amount exceeded");
         s.total -= amount;
+        require(totalMinted >= amount, "total burn amount exceeded");
+        totalMinted -= amount;
 
         if (tokenType == TokenType.Transfer) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
@@ -166,6 +173,10 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         _burn(msg.sender, amount);
         emit LogSwapout(msg.sender, bindaddr, amount);
         return true;
+    }
+
+    function setTotalMintCap(uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        totalMintCap = cap;
     }
 
     function addMinter(address minter, uint256 cap, uint256 max) external onlyRole(DEFAULT_ADMIN_ROLE) {
