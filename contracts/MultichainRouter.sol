@@ -98,13 +98,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     event LogAnySwapOut(address indexed token, address indexed from, string to, uint256 amount, uint256 fromChainID, uint256 toChainID);
 
     event LogAnySwapInAndExec(bytes32 indexed txhash, address indexed token, address indexed to, uint256 amount, uint256 fromChainID, uint256 toChainID, bool success, bytes result);
-    event LogAnySwapOutAndCall(address indexed token, address indexed from, address indexed to, uint256 amount, uint256 fromChainID, uint256 toChainID, bytes data);
     event LogAnySwapOutAndCall(address indexed token, address indexed from, string to, uint256 amount, uint256 fromChainID, uint256 toChainID, bytes data);
-
-    modifier ensure(uint256 deadline) {
-        require(deadline >= block.timestamp, 'MultichainRouter: expired');
-        _;
-    }
 
     constructor(address _tradeProxy, address _feeCalc, address _wNATIVE, address _mpc) MPCManageable(_mpc) {
         tradeProxy = _tradeProxy;
@@ -173,7 +167,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     function _anySwapOutUnderlying(address token, uint256 amount) internal {
         address _underlying = IUnderlying(token).underlying();
-        require(_underlying != address(0), "zero underlying");
+        require(_underlying != address(0), "MultichainRouter: zero underlying");
         IERC20(_underlying).safeTransferFrom(msg.sender, token, amount);
     }
 
@@ -199,7 +193,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     function _anySwapOutNative(address token) internal {
-        require(wNATIVE != address(0), "zero wNATIVE");
+        require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(IUnderlying(token).underlying() == wNATIVE, "MultichainRouter: underlying is not wNATIVE");
         IwNATIVE(wNATIVE).deposit{value: msg.value}();
         assert(IwNATIVE(wNATIVE).transfer(token, msg.value));
@@ -234,7 +228,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
     function anySwapInUnderlying(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID) external nonReentrant onlyMPC {
-        require(IUnderlying(token).underlying() != address(0), "zero underlying");
+        require(IUnderlying(token).underlying() != address(0), "MultichainRouter: zero underlying");
         assert(IRouter(token).mint(address(this), amount));
         IUnderlying(token).withdraw(amount, to);
         emit LogAnySwapIn(txs, token, to, amount, fromChainID, block.chainid);
@@ -242,7 +236,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `Native`
     function anySwapInNative(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID) external nonReentrant onlyMPC {
-        require(wNATIVE != address(0), "zero wNATIVE");
+        require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(IUnderlying(token).underlying() == wNATIVE, "MultichainRouter: underlying is not wNATIVE");
         assert(IRouter(token).mint(address(this), amount));
         IUnderlying(token).withdraw(amount, address(this));
@@ -271,7 +265,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID, bytes calldata data) external nonReentrant onlyMPC {
-        require(msg.sender != tradeProxy, "forbid call swapin from tradeProxy");
+        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
         assert(IRouter(token).mint(msg.sender, amount));
         (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(to, data);
         emit LogAnySwapInAndExec(txs, token, to, amount, fromChainID, block.chainid, sucess, result);
@@ -279,7 +273,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Deposit `msg.value` `Native` to `token` address and mint `msg.value` `token` to `to`
     function depositNative(address token, address to) external payable returns (uint256) {
-        require(wNATIVE != address(0), "zero wNATIVE");
+        require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(IUnderlying(token).underlying() == wNATIVE, "MultichainRouter: underlying is not wNATIVE");
         IwNATIVE(wNATIVE).deposit{value: msg.value}();
         assert(IwNATIVE(wNATIVE).transfer(token, msg.value));
@@ -289,7 +283,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Withdraw `amount` `Native` from `token` address to `to`
     function withdrawNative(address token, uint256 amount, address to) external nonReentrant returns (uint256) {
-        require(wNATIVE != address(0), "zero wNATIVE");
+        require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(IUnderlying(token).underlying() == wNATIVE, "MultichainRouter: underlying is not wNATIVE");
         IUnderlying(token).withdraw(amount, address(this));
         IwNATIVE(wNATIVE).withdraw(amount);
