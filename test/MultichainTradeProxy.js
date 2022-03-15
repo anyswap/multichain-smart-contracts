@@ -17,56 +17,23 @@ async function start() {
 
     // get sushiFactory
     const factory = await getFactory(deploy_wallet);
-    const factoryContract = await loadFactory(factory, deploy_wallet);
 
-    // get sushiRouter
-    const sushiRouter = await getSushiRouter(deploy_wallet, factory);
-    const sushiRouterContract = await loadSushiRouter(sushiRouter, deploy_wallet);
+    // addLiquidityByRouter
+    await addLiquidityByRouter(deploy_wallet, factory, tokenA, tokenB);
 
-    await sendAndApprove(tokenA, deploy_wallet, sushiRouter);
-    await sendAndApprove(tokenB, deploy_wallet, sushiRouter);
+    // addLiquidityByTransfer
+    // await addLiquidityByTransfer(deploy_wallet, factory, tokenA, tokenB);
 
-    // add tokenA and tokenB pair Liquidity
-    await sushiRouterContract.addLiquidity(tokenA, tokenB, '1000000', '1000000', '0', '0', deploy_wallet.address, eth.constant.MaxUint256)
-        .then(res => console.log(`addLiquidity:${res.hash}`));
+    await getBalanceAndLiquidity(deploy_wallet, factory, tokenA, tokenB).then(res => {
+        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
 
-    // // create pair for tokenA and tokenB
-    // await factoryContract.createPair(tokenA, tokenB)
-    //     .then(res => console.log(`create pair:${res.hash}`))
-    // // get pair for tokenA and tokenB
-    // const pair = await factoryContract.getPair(tokenA, tokenB)
-    //     .then(res => { console.log(`get pair:${res}`); return res })
+    // test tradeProxy exec function
+    await testExec(deploy_wallet, factory, tokenA, tokenB);
 
-    // // transfer token to pair for tokenA and tokenB
-    // await addLiquidity(tokenA, pair, amount, deploy_wallet);
-    // await addLiquidity(tokenB, pair, amount, deploy_wallet);
-
-    // const pairContract = await loadPair(pair, deploy_wallet);
-    // await pairContract.mint(deploy_wallet.address)
-    //     .then(res => console.log(`pairContract mint :${res.hash}`));
-
-    // get tradeProxy
-    const tradeProxy = await getTradeProxy(deploy_wallet, factory);
-    const tradeProxyContract = await loadTradProxy(tradeProxy, deploy_wallet);
-
-    const tokenContract = await loadToken(tokenA, deploy_wallet);
-    await tokenContract.approve(tradeProxy, eth.constant.MaxUint256)
-        .then(res => console.log(`tokenContract approve:${res.hash}`));
-
-    const interface = eth.loadInterface(ABIS.UniswapV2Router02.abi);
-    const data = interface.encodeFunctionData('swapExactTokensForTokens', [
-        amount, 0, [tokenA, tokenB], deploy_wallet.address, eth.constant.MaxUint256
-    ])
-    console.log(`calldata:${data}`)
-
-    const execHash = await tradeProxyContract.exec(tokenA, amount, data)
-        .then(res => {
-            console.log(`tradeProxyContract exec:${res.hash}`);
-            return res.hash
-        })
-
-    await eth.getProvider(network).getTransactionReceipt(execHash).then(res => console.log(`reciept:${JSON.stringify(res)}`))
-
+    await getBalanceAndLiquidity(deploy_wallet, factory, tokenA, tokenB).then(res => {
+        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
 };
 
 async function getTokens(wallet) {
@@ -130,7 +97,7 @@ async function loadToken(token, wallet) {
     return eth.loadContract(token, ABIS.AnyswapV6ERC20.abi, wallet);
 }
 
-async function sendAndApprove(token, wallet, sushiRouter) {
+async function mintAndApprove(token, wallet, sushiRouter) {
     // approve tokenB to sushiRouter
     const tokenContract = await loadToken(token, wallet);
     await tokenContract.initVault(wallet.address)
@@ -145,7 +112,7 @@ async function sendAndApprove(token, wallet, sushiRouter) {
         .then(res => console.log(`tokenContract allowance:${res}`))
 }
 
-async function addLiquidity(token, reciept, amount, wallet) {
+async function mintAndTransfer(token, reciept, amount, wallet) {
     const tokenContract = await loadToken(token, wallet);
     await tokenContract.initVault(wallet.address)
         .then(res => console.log(`tokenContract initVault:${res.hash}`));
@@ -153,5 +120,78 @@ async function addLiquidity(token, reciept, amount, wallet) {
         .then(res => console.log(`tokenContract mint:${res.hash}`));
     await tokenContract.transferFrom(wallet.address, reciept, amount)
         .then(res => console.log(`tokenAContract transfer from :${res.hash}`));
+}
+
+async function addLiquidityByRouter(wallet, factory, tokenA, tokenB) {
+    // get sushiRouter
+    const sushiRouter = await getSushiRouter(wallet, factory);
+    const sushiRouterContract = await loadSushiRouter(sushiRouter, wallet);
+
+    await mintAndApprove(tokenA, wallet, sushiRouter);
+    await mintAndApprove(tokenB, wallet, sushiRouter);
+
+    // add tokenA and tokenB pair Liquidity
+    await sushiRouterContract.addLiquidity(tokenA, tokenB, amount, amount, '0', '0', wallet.address, eth.constant.MaxUint256)
+        .then(res => console.log(`addLiquidity:${res.hash}`));
+}
+
+async function addLiquidityByTransfer(wallet, factory, tokenA, tokenB) {
+    // create pair for tokenA and tokenB
+    const factoryContract = await loadFactory(factory, wallet);
+    await factoryContract.createPair(tokenA, tokenB)
+        .then(res => console.log(`create pair:${res.hash}`))
+    // get pair for tokenA and tokenB
+    const pair = await factoryContract.getPair(tokenA, tokenB)
+        .then(res => { console.log(`get pair:${res}`); return res })
+
+    // transfer token to pair for tokenA and tokenB
+    await mintAndTransfer(tokenA, pair, amount, wallet);
+    await mintAndTransfer(tokenB, pair, amount, wallet);
+
+    const pairContract = await loadPair(pair, wallet);
+    await pairContract.mint(wallet.address)
+        .then(res => console.log(`pairContract mint :${res.hash}`));
+}
+
+async function testExec(wallet, factory, tokenA, tokenB) {
+    const tradeProxy = await getTradeProxy(wallet, factory);
+    const tradeProxyContract = await loadTradProxy(tradeProxy, wallet);
+
+    const tokenContract = await loadToken(tokenA, wallet);
+    await tokenContract.approve(tradeProxy, eth.constant.MaxUint256)
+        .then(res => console.log(`tokenContract approve:${res.hash}`));
+
+    const interface = eth.loadInterface(ABIS.UniswapV2Router02.abi);
+    const data = interface.encodeFunctionData('swapExactTokensForTokens', [
+        amount, 0, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256
+    ])
+    console.log(`calldata:${data}`)
+
+    return await tradeProxyContract.exec(tokenA, amount, data)
+        .then(res => {
+            console.log(`tradeProxyContract exec:${res.hash}`);
+            return res.hash
+        })
+}
+
+async function getBalanceAndLiquidity(wallet, factory, tokenA, tokenB) {
+    // create pair for tokenA and tokenB
+    const factoryContract = await loadFactory(factory, wallet);
+    // get pair for tokenA and tokenB
+    const pair = await factoryContract.getPair(tokenA, tokenB)
+        .then(res => { console.log(`get pair:${res}`); return res })
+
+    const tokenAContract = await loadToken(tokenA, wallet);
+    const balances_tokenA = await tokenAContract.balanceOf(pair);
+
+    const tokenBContract = await loadToken(tokenB, wallet);
+    const balances_tokenB = await tokenBContract.balanceOf(pair);
+
+    const pairContract = await loadPair(pair, wallet);
+    const balances_liquidity = await pairContract.balanceOf(wallet.address);
+
+    return {
+        balances_tokenA, balances_tokenB, balances_liquidity
+    }
 }
 start()
