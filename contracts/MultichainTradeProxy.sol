@@ -522,6 +522,12 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
     // ) external;
 }
 
+interface ITradeProxy {
+    function trade(bytes calldata data)
+        external
+        returns (bool sucess, bytes memory result);
+}
+
 abstract contract MPCManageable {
     using Address for address;
 
@@ -577,40 +583,34 @@ abstract contract MPCManageable {
     }
 }
 
-contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
-    address public _sushiSwap;
+contract MultichainTradeProxy is
+    ITradeProxy,
+    MPCManageable,
+    IUniswapV2Router02
+{
     address public _curve;
-    address public constant factory =
+    address public constant SushiV2Factory =
         0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    event EventLog(address to, bytes data);
+    event EventLog(bytes data);
 
     modifier ensure(uint256 deadline) {
         require(deadline >= block.timestamp, "UniswapV2Router: EXPIRED");
         _;
     }
 
-    constructor(
-        address mpc_,
-        address sushiSwap_,
-        address curve_
-    ) MPCManageable(mpc_) {
-        _sushiSwap = sushiSwap_;
+    constructor(address mpc_, address curve_) MPCManageable(mpc_) {
         _curve = curve_;
-    }
-
-    function setSushiSwap(address sushiSwap_) external onlyMPC {
-        _sushiSwap = sushiSwap_;
     }
 
     function setCurve(address curve_) external onlyMPC {
         _curve = curve_;
     }
 
-    function trade(address to, bytes calldata data)
+    function trade(bytes calldata data)
         external
-    // returns (bool success, bytes memory result)
+        returns (bool success, bytes memory result)
     {
         bytes4 sig = bytes4(data[:4]);
         if (
@@ -625,7 +625,7 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
                 uint256 amountIn,
                 uint256 amountOutMin,
                 address[] memory path,
-                address to_,
+                address to,
                 uint256 deadline
             ) = abi.decode(
                     data[4:],
@@ -635,9 +635,10 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
                 amountIn,
                 amountOutMin,
                 path,
-                to_,
+                to,
                 deadline
             );
+            return (true, data);
         }
         // else if (
         //     sig ==
@@ -829,7 +830,8 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
         //         );
         // }
         else {
-            emit EventLog(to, data);
+            emit EventLog(data);
+            return (false, data);
         }
     }
 
@@ -856,8 +858,12 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
         address[] memory path,
         address to,
         uint256 deadline
-    ) internal ensure(deadline) returns (uint256[] memory amounts) {
-        amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path);
+    ) internal virtual ensure(deadline) returns (uint256[] memory amounts) {
+        amounts = UniswapV2Library.getAmountsOut(
+            SushiV2Factory,
+            amountIn,
+            path
+        );
         require(
             amounts[amounts.length - 1] >= amountOutMin,
             "UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT"
@@ -865,7 +871,7 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
         TransferHelper.safeTransferFrom(
             path[0],
             msg.sender,
-            UniswapV2Library.pairFor(factory, path[0], path[1]),
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
             amounts[0]
         );
         _swap(amounts, path, to);
@@ -886,10 +892,11 @@ contract MultichainTradeProxy is MPCManageable, IUniswapV2Router02 {
                 ? (uint256(0), amountOut)
                 : (amountOut, uint256(0));
             address to = i < path.length - 2
-                ? UniswapV2Library.pairFor(factory, output, path[i + 2])
+                ? UniswapV2Library.pairFor(SushiV2Factory, output, path[i + 2])
                 : _to;
-            IUniswapV2Pair(UniswapV2Library.pairFor(factory, input, output))
-                .swap(amount0Out, amount1Out, to, new bytes(0));
+            IUniswapV2Pair(
+                UniswapV2Library.pairFor(SushiV2Factory, input, output)
+            ).swap(amount0Out, amount1Out, to, new bytes(0));
         }
     }
 }
