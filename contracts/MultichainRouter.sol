@@ -34,7 +34,7 @@ interface IwNATIVE {
 }
 
 interface ITradeProxy {
-    function trade(address to, bytes calldata data) external returns (bool sucess, bytes memory result);
+    function trade(address token, address to, uint256 amount, bytes calldata data) external returns (bool sucess, bytes memory result);
 }
 
 interface IFeeCalc {
@@ -266,8 +266,19 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID, bytes calldata data) external nonReentrant onlyMPC {
         require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
-        assert(IRouter(token).mint(msg.sender, amount));
-        (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(to, data);
+        assert(IRouter(token).mint(tradeProxy, amount));
+        (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(token, to, amount, data);
+        emit LogAnySwapInAndExec(txs, token, to, amount, fromChainID, block.chainid, sucess, result);
+    }
+
+    // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
+    function anySwapInUnderlyingAndExec(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID, bytes calldata data) external nonReentrant onlyMPC {
+        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
+        address _underlying = IUnderlying(token).underlying();
+        require(_underlying != address(0), "MultichainRouter: zero underlying");
+        assert(IRouter(token).mint(address(this), amount));
+        IUnderlying(token).withdraw(amount, tradeProxy);
+        (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(_underlying, to, amount, data);
         emit LogAnySwapInAndExec(txs, token, to, amount, fromChainID, block.chainid, sucess, result);
     }
 
