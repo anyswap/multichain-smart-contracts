@@ -204,6 +204,7 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     }
 
     function setMinterTotal(address minter, uint256 total) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(hasRole(MINTER_ROLE, minter), "not minter");
         minterSupply[minter].total = total;
     }
 
