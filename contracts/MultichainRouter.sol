@@ -34,7 +34,12 @@ interface IwNATIVE {
 }
 
 interface ITradeProxy {
-    function trade(address token, address to, uint256 amount, bytes calldata data) external returns (bool sucess, bytes memory result);
+    function trade(
+        address tradeProxy,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (address recvToken, address receiver, uint256 recvAmount);
 }
 
 interface IFeeCalc {
@@ -89,7 +94,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
 
-    address public tradeProxy;
+    address public tradeProxyManager;
     address public feeCalc;
     address public immutable wNATIVE;
 
@@ -97,17 +102,17 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     event LogAnySwapOut(address indexed token, address indexed from, address indexed to, uint256 amount, uint256 fromChainID, uint256 toChainID);
     event LogAnySwapOut(address indexed token, address indexed from, string to, uint256 amount, uint256 fromChainID, uint256 toChainID);
 
-    event LogAnySwapInAndExec(bytes32 indexed txhash, address indexed token, address indexed to, uint256 amount, uint256 fromChainID, uint256 toChainID, bool success, bytes result);
-    event LogAnySwapOutAndCall(address indexed token, address indexed from, string to, uint256 amount, uint256 fromChainID, uint256 toChainID, bytes data);
+    event LogAnySwapInAndExec(bytes32 indexed txhash, address indexed token, uint256 amount, uint256 fromChainID, uint256 toChainID, address indexed recvToken, address receiver, uint256 recvAmount);
+    event LogAnySwapOutAndCall(address indexed token, address indexed from, uint256 amount, uint256 fromChainID, uint256 toChainID, string tradeProxy, bytes data);
 
-    constructor(address _tradeProxy, address _feeCalc, address _wNATIVE, address _mpc) MPCManageable(_mpc) {
-        tradeProxy = _tradeProxy;
+    constructor(address _tradeProxyManager, address _feeCalc, address _wNATIVE, address _mpc) MPCManageable(_mpc) {
+        tradeProxyManager = _tradeProxyManager;
         feeCalc = _feeCalc;
         wNATIVE = _wNATIVE;
     }
 
-    function setTradeProxy(address _tradeProxy) external onlyMPC {
-        tradeProxy = _tradeProxy;
+    function setTradeProxyManager(address _tradeProxyManager) external onlyMPC {
+        tradeProxyManager = _tradeProxyManager;
     }
 
     function setFeeCalc(address _feeCalc) external onlyMPC {
@@ -159,10 +164,10 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call trade proxy with `data`
-    function anySwapOutAndCall(address token, string memory to, uint256 amount, uint256 toChainID, bytes calldata data) external {
+    function anySwapOutAndCall(address token, uint256 amount, uint256 toChainID, string memory tradeProxy, bytes calldata data) external {
         assert(IRouter(token).burn(msg.sender, amount));
         uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
-        emit LogAnySwapOutAndCall(token, msg.sender, to, receiveAmount, block.chainid, toChainID, data);
+        emit LogAnySwapOutAndCall(token, msg.sender, receiveAmount, block.chainid, toChainID, tradeProxy, data);
     }
 
     function _anySwapOutUnderlying(address token, uint256 amount) internal {
@@ -186,10 +191,10 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call trade proxy with `data`
-    function anySwapOutUnderlyingAndCall(address token, string memory to, uint256 amount, uint256 toChainID, bytes calldata data) external {
+    function anySwapOutUnderlyingAndCall(address token, uint256 amount, uint256 toChainID, string memory tradeProxy, bytes calldata data) external {
         _anySwapOutUnderlying(token, amount);
         uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
-        emit LogAnySwapOutAndCall(token, msg.sender, to, receiveAmount, block.chainid, toChainID, data);
+        emit LogAnySwapOutAndCall(token, msg.sender, receiveAmount, block.chainid, toChainID, tradeProxy, data);
     }
 
     function _anySwapOutNative(address token) internal {
@@ -214,10 +219,10 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call trade proxy with `data`
-    function anySwapOutNativeAndCall(address token, string memory to, uint256 toChainID, bytes calldata data) external payable {
+    function anySwapOutNativeAndCall(address token, uint256 toChainID, string memory tradeProxy, bytes calldata data) external payable {
         _anySwapOutNative(token);
         uint256 receiveAmount = _calcRecvAmount(token, msg.sender, msg.value);
-        emit LogAnySwapOutAndCall(token, msg.sender, to, receiveAmount, block.chainid, toChainID, data);
+        emit LogAnySwapOutAndCall(token, msg.sender, receiveAmount, block.chainid, toChainID, tradeProxy, data);
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
@@ -264,22 +269,22 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
-    function anySwapInAndExec(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID, bytes calldata data) external nonReentrant onlyMPC {
-        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
-        assert(IRouter(token).mint(tradeProxy, amount));
-        (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(token, to, amount, data);
-        emit LogAnySwapInAndExec(txs, token, to, amount, fromChainID, block.chainid, sucess, result);
+    function anySwapInAndExec(bytes32 txs, address token, uint256 amount, uint256 fromChainID, address tradeProxy, bytes calldata data) external nonReentrant onlyMPC {
+        require(msg.sender != tradeProxyManager, "MultichainRouter: forbid call swapin from tradeProxyManager");
+        assert(IRouter(token).mint(tradeProxyManager, amount));
+        (address recvToken, address receiver, uint256 recvAmount) = ITradeProxy(tradeProxyManager).trade(tradeProxy, token, amount, data);
+        emit LogAnySwapInAndExec(txs, token, amount, fromChainID, block.chainid, recvToken, receiver, recvAmount);
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
-    function anySwapInUnderlyingAndExec(bytes32 txs, address token, address to, uint256 amount, uint256 fromChainID, bytes calldata data) external nonReentrant onlyMPC {
-        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
+    function anySwapInUnderlyingAndExec(bytes32 txs, address token, uint256 amount, uint256 fromChainID, address tradeProxy, bytes calldata data) external nonReentrant onlyMPC {
+        require(msg.sender != tradeProxyManager, "MultichainRouter: forbid call swapin from tradeProxyManager");
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
         assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, tradeProxy);
-        (bool sucess, bytes memory result) = ITradeProxy(tradeProxy).trade(_underlying, to, amount, data);
-        emit LogAnySwapInAndExec(txs, token, to, amount, fromChainID, block.chainid, sucess, result);
+        IUnderlying(token).withdraw(amount, tradeProxyManager);
+        (address recvToken, address receiver, uint256 recvAmount) = ITradeProxy(tradeProxyManager).trade(tradeProxy, _underlying, amount, data);
+        emit LogAnySwapInAndExec(txs, token, amount, fromChainID, block.chainid, recvToken, receiver, recvAmount);
     }
 
     // Deposit `msg.value` `Native` to `token` address and mint `msg.value` `token` to `to`

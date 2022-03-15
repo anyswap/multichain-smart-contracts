@@ -182,7 +182,7 @@ library UniswapV2Library {
         address factory,
         address tokenA,
         address tokenB
-    ) internal pure returns (address pair) {
+    ) internal view returns (address pair) {
         return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
     }
 
@@ -552,11 +552,11 @@ interface ITradeProxy {
 
 interface ITradeProxyManageable {
     function trade(
+        address tradeProxy,
         address token,
-        address to,
         uint256 amount,
         bytes calldata data
-    ) external;
+    ) external returns (address recvToken, address receiver, uint256 recvAmount);
 
     function addTradeProxy(address tradeProxy) external;
 
@@ -618,7 +618,7 @@ abstract contract MPCManageable {
     }
 }
 
-contract TradeProxyManageable is MPCManageable, ITradeProxyManageable {
+contract TradeProxyManager is MPCManageable, ITradeProxyManageable {
     using Address for address;
 
     mapping(address => bool) public tradeProxyMap;
@@ -656,12 +656,12 @@ contract TradeProxyManageable is MPCManageable, ITradeProxyManageable {
     }
 
     function trade(
+        address tradeProxy,
         address token,
-        address to,
         uint256 amount,
         bytes calldata data
-    ) external tradeProxyExists(to) {
-        ITradeProxy(to).exec(token, amount, data);
+    ) external tradeProxyExists(tradeProxy) returns (address recvToken, address receiver, uint256 recvAmount) {
+        ITradeProxy(tradeProxy).exec(token, amount, data);
     }
 }
 
