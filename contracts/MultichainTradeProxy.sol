@@ -18,6 +18,40 @@ library SafeMathUniswap {
     }
 }
 
+interface IUniswapV2Factory {
+    event PairCreated(
+        address indexed token0,
+        address indexed token1,
+        address pair,
+        uint256
+    );
+
+    function feeTo() external view returns (address);
+
+    function feeToSetter() external view returns (address);
+
+    function migrator() external view returns (address);
+
+    function getPair(address tokenA, address tokenB)
+        external
+        view
+        returns (address pair);
+
+    function allPairs(uint256) external view returns (address pair);
+
+    function allPairsLength() external view returns (uint256);
+
+    function createPair(address tokenA, address tokenB)
+        external
+        returns (address pair);
+
+    function setFeeTo(address) external;
+
+    function setFeeToSetter(address) external;
+
+    function setMigrator(address) external;
+}
+
 interface IUniswapV2Pair {
     event Approval(
         address indexed owner,
@@ -149,21 +183,7 @@ library UniswapV2Library {
         address tokenA,
         address tokenB
     ) internal pure returns (address pair) {
-        (address token0, address token1) = sortTokens(tokenA, tokenB);
-        pair = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            hex"ff",
-                            factory,
-                            keccak256(abi.encodePacked(token0, token1)),
-                            hex"e18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303" // init code hash
-                        )
-                    )
-                )
-            )
-        );
+        return IUniswapV2Factory(factory).getPair(tokenA, tokenB);
     }
 
     // fetches and sorts the reserves for a pair
@@ -523,9 +543,24 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
 }
 
 interface ITradeProxy {
-    function trade(bytes calldata data)
-        external
-        returns (bool sucess, bytes memory result);
+    function exec(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external;
+}
+
+interface ITradeProxyManageable {
+    function trade(
+        address token,
+        address to,
+        uint256 amount,
+        bytes calldata data
+    ) external;
+
+    function addTradeProxy(address tradeProxy) external;
+
+    function removeTradeProxy(address tradeProxy) external;
 }
 
 abstract contract MPCManageable {
@@ -583,15 +618,64 @@ abstract contract MPCManageable {
     }
 }
 
+contract TradeProxyManageable is MPCManageable, ITradeProxyManageable {
+    using Address for address;
+
+    mapping(address => bool) public tradeProxyMap;
+
+    modifier tradeProxyExists(address tradeProxy) {
+        require(
+            tradeProxyMap[tradeProxy],
+            "TradeProxyManageable: tradeProxy nonexists!"
+        );
+        _;
+    }
+
+    constructor(address mpc_, address[] memory tradeProxys)
+        MPCManageable(mpc_)
+    {
+        for (uint256 index; index < tradeProxys.length; index++) {
+            tradeProxyMap[tradeProxys[index]] = true;
+        }
+    }
+
+    function addTradeProxy(address tradeProxy) external onlyMPC {
+        require(
+            tradeProxyMap[tradeProxy] == false,
+            "TradeProxyManageable: tradeProxy exists!"
+        );
+        tradeProxyMap[tradeProxy] = true;
+    }
+
+    function removeTradeProxy(address tradeProxy) external onlyMPC {
+        require(
+            tradeProxyMap[tradeProxy],
+            "TradeProxyManageable: tradeProxy nonexists!"
+        );
+        tradeProxyMap[tradeProxy] = false;
+    }
+
+    function trade(
+        address token,
+        address to,
+        uint256 amount,
+        bytes calldata data
+    ) external tradeProxyExists(to) {
+        ITradeProxy(to).exec(token, amount, data);
+    }
+}
+
 contract MultichainTradeProxy is
     ITradeProxy,
     MPCManageable,
     IUniswapV2Router02
 {
-    address public _curve;
-    address public constant SushiV2Factory =
-        0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-    address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    // address public constant SushiV2Factory =
+    //     0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
+    // address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
+    address public immutable SushiV2Factory;
+    address public immutable WETH;
 
     event EventLog(bytes data);
 
@@ -600,18 +684,20 @@ contract MultichainTradeProxy is
         _;
     }
 
-    constructor(address mpc_, address curve_) MPCManageable(mpc_) {
-        _curve = curve_;
+    constructor(
+        address mpc_,
+        address sushiV2Factory_,
+        address weth_
+    ) MPCManageable(mpc_) {
+        SushiV2Factory = sushiV2Factory_;
+        WETH = weth_;
     }
 
-    function setCurve(address curve_) external onlyMPC {
-        _curve = curve_;
-    }
-
-    function trade(bytes calldata data)
-        external
-        returns (bool success, bytes memory result)
-    {
+    function exec(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external {
         bytes4 sig = bytes4(data[:4]);
         if (
             sig ==
@@ -631,6 +717,14 @@ contract MultichainTradeProxy is
                     data[4:],
                     (uint256, uint256, address[], address, uint256)
                 );
+            require(
+                amountIn <= amount,
+                "MultichainTradeProxy: swap amount has error"
+            );
+            require(
+                path[0] == token,
+                "MultichainTradeProxy: swap token has error"
+            );
             _swapExactTokensForTokens(
                 amountIn,
                 amountOutMin,
@@ -638,7 +732,6 @@ contract MultichainTradeProxy is
                 to,
                 deadline
             );
-            return (true, data);
         }
         // else if (
         //     sig ==
@@ -830,8 +923,9 @@ contract MultichainTradeProxy is
         //         );
         // }
         else {
-            emit EventLog(data);
-            return (false, data);
+            revert(
+                "MultichainTradeProxy: This tradeProxy not support to parse param data!"
+            );
         }
     }
 
