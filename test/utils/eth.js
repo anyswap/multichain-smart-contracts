@@ -1,4 +1,4 @@
-const { ethers, utils } = require("ethers");
+const { ethers } = require("ethers");
 const web3 = require("web3")
 const eth = {};
 
@@ -23,6 +23,5 @@ eth.loadInterface = function (abi) {
 }
 
 eth.constant = ethers.constants;
-eth.utils = ethers.utils;
 
 module.exports = eth;
