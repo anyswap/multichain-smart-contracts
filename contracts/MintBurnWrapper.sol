@@ -86,7 +86,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         MintBurnAny,  // mint and burn(address from, uint256 amount), don't need approve
         MintBurnFrom, // mint and burnFrom(address from, uint256 amount), need approve
         MintBurnSelf, // mint and burn(uint256 amount), call transferFrom first, need approve
-        Transfer      // transfer and transferFrom, need approve
+        Transfer,     // transfer and transferFrom, need approve
+        TransferDeposit // transfer and transferFrom, deposit and withdraw, need approve
     }
 
     address public immutable token; // the target token this contract is wrapping
@@ -96,6 +97,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     bool public allBurnPaused; // pause all burn calling
     mapping(address => bool) public mintPaused; // pause specify minters' mint calling
     mapping(address => bool) public burnPaused; // pause specify minters' burn calling
+
+    mapping(address => uint256) public depositBalance;
 
     constructor(address _token, TokenType _tokenType, uint256 _totalMintCap, address _admin) {
         require(_token != address(0), "zero token address");
@@ -120,7 +123,7 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         totalMinted += amount;
         require(totalMinted <= totalMintCap, "total mint cap exceeded");
 
-        if (tokenType == TokenType.Transfer) {
+        if (tokenType == TokenType.Transfer || tokenType == TokenType.TransferDeposit) {
             IERC20(token).safeTransfer(to, amount);
         } else {
             TokenOperation.safeMint(token, to, amount);
@@ -136,7 +139,7 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         require(totalMinted >= amount, "total burn amount exceeded");
         totalMinted -= amount;
 
-        if (tokenType == TokenType.Transfer) {
+        if (tokenType == TokenType.Transfer || tokenType == TokenType.TransferDeposit) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
         } else if (tokenType == TokenType.MintBurnAny) {
             TokenOperation.safeBurnAny(token, from, amount);
@@ -173,6 +176,20 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         _burn(msg.sender, amount);
         emit LogSwapout(msg.sender, bindaddr, amount);
         return true;
+    }
+
+    function deposit(uint256 amount, address to) external returns (uint256) {
+        require(tokenType == TokenType.TransferDeposit, "forbid depoist");
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        depositBalance[to] += amount;
+        return amount;
+    }
+
+    function withdraw(uint256 amount, address to) external returns (uint256) {
+        require(tokenType == TokenType.TransferDeposit, "forbid withdraw");
+        depositBalance[msg.sender] -= amount;
+        IERC20(token).safeTransfer(to, amount);
+        return amount;
     }
 
     function setTotalMintCap(uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -236,4 +253,3 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         burnPaused[minter] = paused;
     }
 }
-
