@@ -22,9 +22,9 @@ interface ITradeProxy {
 }
 
 interface ICurve {
-    function coins(int128 index) external returns (address);
+    function coins(uint256 index) external view returns (address);
 
-    function underlying_coins(int128 index) external returns (address);
+    function underlying_coins(uint256 index) external view returns (address);
 }
 
 contract TradeProxy_Curve is MPCManageable, ITradeProxy {
@@ -67,7 +67,7 @@ contract TradeProxy_Curve is MPCManageable, ITradeProxy {
         pure
         returns (TradeInfo memory)
     {
-        return abi.decode((data), (TradeInfo));
+        return abi.decode(data, (TradeInfo));
     }
 
     function addSupportedPools(address[] calldata pools) external onlyMPC {
@@ -100,26 +100,27 @@ contract TradeProxy_Curve is MPCManageable, ITradeProxy {
         address pool = t.pool;
         require(supportedPools[pool], "TradeProxy: unsupported pool");
 
-        int128 i = t.i;
-        int128 j = t.j;
-
         address srcToken;
-        if (t.is_exchange_underlying) {
-            srcToken = ICurve(pool).coins(i);
-            recvToken = ICurve(pool).coins(j);
-        } else {
-            srcToken = ICurve(pool).underlying_coins(i);
-            recvToken = ICurve(pool).underlying_coins(j);
+        {
+            uint256 i = uint256(uint128(t.i));
+            uint256 j = uint256(uint128(t.j));
+            if (t.is_exchange_underlying) {
+                srcToken = ICurve(pool).coins(i);
+                recvToken = ICurve(pool).coins(j);
+            } else {
+                srcToken = ICurve(pool).underlying_coins(i);
+                recvToken = ICurve(pool).underlying_coins(j);
+            }
         }
-
         require(token == srcToken, "TradeProxy: source token mismatch");
+        require(recvToken != address(0), "TradeProxy: zero receive token");
 
         uint256 old_balance = IERC20(recvToken).balanceOf(address(this));
 
         if (t.is_exchange_underlying) {
-            call_exchange_underlying(pool, i, j, amount, t.min_dy);
+            call_exchange_underlying(pool, t.i, t.j, amount, t.min_dy);
         } else {
-            call_exchange(pool, i, j, amount, t.min_dy);
+            call_exchange(pool, t.i, t.j, amount, t.min_dy);
         }
 
         uint256 new_balance = IERC20(recvToken).balanceOf(address(this));
