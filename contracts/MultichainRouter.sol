@@ -5,7 +5,7 @@ pragma solidity ^0.8.10;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-
+import "./MPCManageable.sol";
 
 interface IRouter {
     function mint(address to, uint256 amount) external returns (bool);
@@ -44,50 +44,6 @@ interface ITradeProxy {
 
 interface IFeeCalc {
     function calcFee(address token, address sender, uint256 amount) external returns (uint256 fee);
-}
-
-abstract contract MPCManageable {
-    using Address for address;
-
-    address public mpc;
-    address public pendingMPC;
-
-    uint256 public constant delay = 2 days;
-    uint256 public delayMPC;
-
-    modifier onlyMPC() {
-        require(msg.sender == mpc, "MPC: only mpc");
-        _;
-    }
-
-    event LogChangeMPC(address indexed oldMPC, address indexed newMPC, uint256 effectiveTime);
-    event LogApplyMPC(address indexed oldMPC, address indexed newMPC, uint256 applyTime);
-
-    constructor(address _mpc) {
-        require(_mpc != address(0), "MPC: mpc is the zero address");
-        mpc = _mpc;
-        emit LogChangeMPC(address(0), mpc, block.timestamp);
-    }
-
-    function changeMPC(address _mpc) external onlyMPC {
-        require(_mpc != address(0), "MPC: mpc is the zero address");
-        pendingMPC = _mpc;
-        delayMPC = block.timestamp + delay;
-        emit LogChangeMPC(mpc, pendingMPC, delayMPC);
-    }
-
-    function applyMPC() external {
-        require(
-            msg.sender == pendingMPC ||
-            (msg.sender == mpc && address(pendingMPC).isContract()),
-            "MPC: only pending mpc"
-        );
-        require(delayMPC > 0 && block.timestamp >= delayMPC, "MPC: time before delayMPC");
-        emit LogApplyMPC(mpc, pendingMPC, block.timestamp);
-        mpc = pendingMPC;
-        pendingMPC = address(0);
-        delayMPC = 0;
-    }
 }
 
 contract MultichainRouter is MPCManageable, ReentrancyGuard {
@@ -270,19 +226,19 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(bytes32 txs, address token, uint256 amount, uint256 fromChainID, address tradeProxy, bytes calldata data) external nonReentrant onlyMPC {
-        require(msg.sender != tradeProxyManager, "MultichainRouter: forbid call swapin from tradeProxyManager");
-        assert(IRouter(token).mint(tradeProxyManager, amount));
+        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
+        assert(IRouter(token).mint(tradeProxy, amount));
         (address recvToken, address receiver, uint256 recvAmount) = ITradeProxy(tradeProxyManager).trade(tradeProxy, token, amount, data);
         emit LogAnySwapInAndExec(txs, token, amount, fromChainID, block.chainid, recvToken, receiver, recvAmount);
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
     function anySwapInUnderlyingAndExec(bytes32 txs, address token, uint256 amount, uint256 fromChainID, address tradeProxy, bytes calldata data) external nonReentrant onlyMPC {
-        require(msg.sender != tradeProxyManager, "MultichainRouter: forbid call swapin from tradeProxyManager");
+        require(msg.sender != tradeProxy, "MultichainRouter: forbid call swapin from tradeProxy");
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
         assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, tradeProxyManager);
+        IUnderlying(token).withdraw(amount, tradeProxy);
         (address recvToken, address receiver, uint256 recvAmount) = ITradeProxy(tradeProxyManager).trade(tradeProxy, _underlying, amount, data);
         emit LogAnySwapInAndExec(txs, token, amount, fromChainID, block.chainid, recvToken, receiver, recvAmount);
     }
