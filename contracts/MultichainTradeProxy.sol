@@ -18,6 +18,48 @@ library SafeMathUniswap {
     }
 }
 
+interface IERC20Uniswap {
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    function name() external view returns (string memory);
+
+    function symbol() external view returns (string memory);
+
+    function decimals() external view returns (uint8);
+
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address owner) external view returns (uint256);
+
+    function allowance(address owner, address spender)
+        external
+        view
+        returns (uint256);
+
+    function approve(address spender, uint256 value) external returns (bool);
+
+    function transfer(address to, uint256 value) external returns (bool);
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 value
+    ) external returns (bool);
+}
+
+interface IWETH {
+    function deposit() external payable;
+
+    function transfer(address to, uint256 value) external returns (bool);
+
+    function withdraw(uint256) external;
+}
+
 interface IUniswapV2Factory {
     event PairCreated(
         address indexed token0,
@@ -340,214 +382,18 @@ library TransferHelper {
     }
 }
 
-interface IUniswapV2Router01 {
-    // function factory() external pure returns (address);
-
-    // function WETH() external pure returns (address);
-
-    // function addLiquidity(
-    //     address tokenA,
-    //     address tokenB,
-    //     uint256 amountADesired,
-    //     uint256 amountBDesired,
-    //     uint256 amountAMin,
-    //     uint256 amountBMin,
-    //     address to,
-    //     uint256 deadline
-    // )
-    //     external
-    //     returns (
-    //         uint256 amountA,
-    //         uint256 amountB,
-    //         uint256 liquidity
-    //     );
-
-    // function addLiquidityETH(
-    //     address token,
-    //     uint256 amountTokenDesired,
-    //     uint256 amountTokenMin,
-    //     uint256 amountETHMin,
-    //     address to,
-    //     uint256 deadline
-    // )
-    //     external
-    //     payable
-    //     returns (
-    //         uint256 amountToken,
-    //         uint256 amountETH,
-    //         uint256 liquidity
-    //     );
-
-    // function removeLiquidity(
-    //     address tokenA,
-    //     address tokenB,
-    //     uint256 liquidity,
-    //     uint256 amountAMin,
-    //     uint256 amountBMin,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256 amountA, uint256 amountB);
-
-    // function removeLiquidityETH(
-    //     address token,
-    //     uint256 liquidity,
-    //     uint256 amountTokenMin,
-    //     uint256 amountETHMin,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256 amountToken, uint256 amountETH);
-
-    // function removeLiquidityWithPermit(
-    //     address tokenA,
-    //     address tokenB,
-    //     uint256 liquidity,
-    //     uint256 amountAMin,
-    //     uint256 amountBMin,
-    //     address to,
-    //     uint256 deadline,
-    //     bool approveMax,
-    //     uint8 v,
-    //     bytes32 r,
-    //     bytes32 s
-    // ) external returns (uint256 amountA, uint256 amountB);
-
-    // function removeLiquidityETHWithPermit(
-    //     address token,
-    //     uint256 liquidity,
-    //     uint256 amountTokenMin,
-    //     uint256 amountETHMin,
-    //     address to,
-    //     uint256 deadline,
-    //     bool approveMax,
-    //     uint8 v,
-    //     bytes32 r,
-    //     bytes32 s
-    // ) external returns (uint256 amountToken, uint256 amountETH);
-
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-
-    // function swapTokensForExactTokens(
-    //     uint256 amountOut,
-    //     uint256 amountInMax,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256[] memory amounts);
-
-    // function swapExactETHForTokens(
-    //     uint256 amountOutMin,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external payable returns (uint256[] memory amounts);
-
-    // function swapTokensForExactETH(
-    //     uint256 amountOut,
-    //     uint256 amountInMax,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256[] memory amounts);
-
-    // function swapExactTokensForETH(
-    //     uint256 amountIn,
-    //     uint256 amountOutMin,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256[] memory amounts);
-
-    // function swapETHForExactTokens(
-    //     uint256 amountOut,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external payable returns (uint256[] memory amounts);
-
-    // function quote(
-    //     uint256 amountA,
-    //     uint256 reserveA,
-    //     uint256 reserveB
-    // ) external pure returns (uint256 amountB);
-
-    // function getAmountOut(
-    //     uint256 amountIn,
-    //     uint256 reserveIn,
-    //     uint256 reserveOut
-    // ) external pure returns (uint256 amountOut);
-
-    // function getAmountIn(
-    //     uint256 amountOut,
-    //     uint256 reserveIn,
-    //     uint256 reserveOut
-    // ) external pure returns (uint256 amountIn);
-
-    // function getAmountsOut(uint256 amountIn, address[] calldata path)
-    //     external
-    //     view
-    //     returns (uint256[] memory amounts);
-
-    // function getAmountsIn(uint256 amountOut, address[] calldata path)
-    // external
-    // view
-    // returns (uint256[] memory amounts);
-}
-
-interface IUniswapV2Router02 is IUniswapV2Router01 {
-    // function removeLiquidityETHSupportingFeeOnTransferTokens(
-    //     address token,
-    //     uint256 liquidity,
-    //     uint256 amountTokenMin,
-    //     uint256 amountETHMin,
-    //     address to,
-    //     uint256 deadline
-    // ) external returns (uint256 amountETH);
-    // function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
-    //     address token,
-    //     uint256 liquidity,
-    //     uint256 amountTokenMin,
-    //     uint256 amountETHMin,
-    //     address to,
-    //     uint256 deadline,
-    //     bool approveMax,
-    //     uint8 v,
-    //     bytes32 r,
-    //     bytes32 s
-    // ) external returns (uint256 amountETH);
-    // function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-    //     uint256 amountIn,
-    //     uint256 amountOutMin,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external;
-    // function swapExactETHForTokensSupportingFeeOnTransferTokens(
-    //     uint256 amountOutMin,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external payable;
-    // function swapExactTokensForETHSupportingFeeOnTransferTokens(
-    //     uint256 amountIn,
-    //     uint256 amountOutMin,
-    //     address[] calldata path,
-    //     address to,
-    //     uint256 deadline
-    // ) external;
-}
-
 interface ITradeProxy {
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    ) external;
+    )
+        external
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        );
 }
 
 interface ITradeProxyManageable {
@@ -556,7 +402,13 @@ interface ITradeProxyManageable {
         address token,
         uint256 amount,
         bytes calldata data
-    ) external returns (address recvToken, address receiver, uint256 recvAmount);
+    )
+        external
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        );
 
     function addTradeProxy(address tradeProxy) external;
 
@@ -660,22 +512,29 @@ contract TradeProxyManager is MPCManageable, ITradeProxyManageable {
         address token,
         uint256 amount,
         bytes calldata data
-    ) external tradeProxyExists(tradeProxy) returns (address recvToken, address receiver, uint256 recvAmount) {
-        ITradeProxy(tradeProxy).exec(token, amount, data);
+    )
+        external
+        tradeProxyExists(tradeProxy)
+        onlyMPC
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
+        (recvToken, receiver, recvAmount) = ITradeProxy(tradeProxy).exec(
+            token,
+            amount,
+            data
+        );
     }
 }
 
-contract MultichainTradeProxy is
-    ITradeProxy,
-    MPCManageable,
-    IUniswapV2Router02
-{
-    // address public constant SushiV2Factory =
-    //     0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-    // address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+contract MultichainTradeProxy is ITradeProxy, MPCManageable {
+    using SafeMathUniswap for uint256;
 
-    address public immutable SushiV2Factory;
-    address public immutable WETH;
+    address public immutable SushiV2Factory; // 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac
+    address public immutable WETH; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
 
     event EventLog(bytes data);
 
@@ -697,7 +556,15 @@ contract MultichainTradeProxy is
         address token,
         uint256 amount,
         bytes calldata data
-    ) external {
+    )
+        external
+        onlyMPC
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
         bytes4 sig = bytes4(data[:4]);
         if (
             sig ==
@@ -707,58 +574,86 @@ contract MultichainTradeProxy is
                 )
             )
         ) {
+            (recvToken, receiver, recvAmount) = swapExactTokensForTokens(
+                token,
+                amount,
+                data
+            );
+        } else if (
+            sig ==
+            bytes4(
+                keccak256(
+                    "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)"
+                )
+            )
+        ) {
+            (recvToken, receiver, recvAmount) = swapTokensForExactTokens(
+                token,
+                amount,
+                data
+            );
+        } else if (
+            sig ==
+            bytes4(
+                keccak256(
+                    "swapTokensForExactETH(uint256,uint256,address[],address,uint256)"
+                )
+            )
+        ) {
+            (recvToken, receiver, recvAmount) = swapTokensForExactETH(
+                token,
+                amount,
+                data
+            );
+        } else if (
+            sig ==
+            bytes4(
+                keccak256(
+                    "swapExactTokensForETH(uint256,uint256,address[],address,uint256)"
+                )
+            )
+        ) {
+            (recvToken, receiver, recvAmount) = swapExactTokensForETH(
+                token,
+                amount,
+                data
+            );
+        } else if (
+            sig ==
+            bytes4(
+                keccak256(
+                    "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"
+                )
+            )
+        ) {
             (
-                uint256 amountIn,
-                uint256 amountOutMin,
-                address[] memory path,
-                address to,
-                uint256 deadline
-            ) = abi.decode(
-                    data[4:],
-                    (uint256, uint256, address[], address, uint256)
-                );
-            require(
-                amountIn <= amount,
-                "MultichainTradeProxy: swap amount has error"
+                recvToken,
+                receiver,
+                recvAmount
+            ) = swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                token,
+                amount,
+                data
             );
-            require(
-                path[0] == token,
-                "MultichainTradeProxy: swap token has error"
-            );
-            _swapExactTokensForTokens(
-                amountIn,
-                amountOutMin,
-                path,
-                to,
-                deadline
+        } else if (
+            sig ==
+            bytes4(
+                keccak256(
+                    "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"
+                )
+            )
+        ) {
+            (
+                recvToken,
+                receiver,
+                recvAmount
+            ) = swapExactTokensForETHSupportingFeeOnTransferTokens(
+                token,
+                amount,
+                data
             );
         }
-        // else if (
-        //     sig ==
-        //     bytes4(
-        //         keccak256(
-        //             "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)"
-        //         )
-        //     )
-        // ) {
-        //     (
-        //         uint256 amountOut,
-        //         uint256 amountInMax,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(
-        //             data[4:],
-        //             (uint256, uint256, address[], address, uint256)
-        //         );
-        //     IUniswapV2Router02(_sushiSwap).swapTokensForExactTokens(
-        //         amountOut,
-        //         amountInMax,
-        //         path,
-        //         to_,
-        //         deadline
-        //     );
-        // } else if (
+        //  else if (
         //     sig ==
         //     bytes4(
         //         keccak256(
@@ -766,69 +661,13 @@ contract MultichainTradeProxy is
         //         )
         //     )
         // ) {
-        //     (
-        //         uint256 amountOutMin,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(data[4:], (uint256, address[], address, uint256));
-        //     IUniswapV2Router02(_sushiSwap).swapExactETHForTokens(
-        //         amountOutMin,
-        //         path,
-        //         to_,
-        //         deadline
+        //     (recvToken, receiver, recvAmount) = swapExactETHForTokens(
+        //         token,
+        //         amount,
+        //         data
         //     );
-        // } else if (
-        //     sig ==
-        //     bytes4(
-        //         keccak256(
-        //             "swapTokensForExactETH(uint256,uint256,address[],address,uint256)"
-        //         )
-        //     )
-        // ) {
-        //     (
-        //         uint256 amountOut,
-        //         uint256 amountInMax,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(
-        //             data[4:],
-        //             (uint256, uint256, address[], address, uint256)
-        //         );
-        //     IUniswapV2Router02(_sushiSwap).swapTokensForExactETH(
-        //         amountOut,
-        //         amountInMax,
-        //         path,
-        //         to_,
-        //         deadline
-        //     );
-        // } else if (
-        //     sig ==
-        //     bytes4(
-        //         keccak256(
-        //             "swapExactTokensForETH(uint256,uint256,address[],address,uint256)"
-        //         )
-        //     )
-        // ) {
-        //     (
-        //         uint256 amountIn,
-        //         uint256 amountOutMin,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(
-        //             data[4:],
-        //             (uint256, uint256, address[], address, uint256)
-        //         );
-        //     IUniswapV2Router02(_sushiSwap).swapExactTokensForETH(
-        //         amountIn,
-        //         amountOutMin,
-        //         path,
-        //         to_,
-        //         deadline
-        //     );
-        // } else if (
+        // }
+        //  else if (
         //     sig ==
         //     bytes4(
         //         keccak256(
@@ -848,33 +687,8 @@ contract MultichainTradeProxy is
         //         to_,
         //         deadline
         //     );
-        // } else if (
-        //     sig ==
-        //     bytes4(
-        //         keccak256(
-        //             "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"
-        //         )
-        //     )
-        // ) {
-        //     (
-        //         uint256 amountIn,
-        //         uint256 amountOutMin,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(
-        //             data[4:],
-        //             (uint256, uint256, address[], address, uint256)
-        //         );
-        //     IUniswapV2Router02(_sushiSwap)
-        //         .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        //             amountIn,
-        //             amountOutMin,
-        //             path,
-        //             to_,
-        //             deadline
-        //         );
-        // } else if (
+        // }
+        // else if (
         //     sig ==
         //     bytes4(
         //         keccak256(
@@ -895,32 +709,6 @@ contract MultichainTradeProxy is
         //             to_,
         //             deadline
         //         );
-        // } else if (
-        //     sig ==
-        //     bytes4(
-        //         keccak256(
-        //             "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)"
-        //         )
-        //     )
-        // ) {
-        //     (
-        //         uint256 amountIn,
-        //         uint256 amountOutMin,
-        //         address[] memory path,
-        //         address to_,
-        //         uint256 deadline
-        //     ) = abi.decode(
-        //             data[4:],
-        //             (uint256, uint256, address[], address, uint256)
-        //         );
-        //     IUniswapV2Router02(_sushiSwap)
-        //         .swapExactTokensForETHSupportingFeeOnTransferTokens(
-        //             amountIn,
-        //             amountOutMin,
-        //             path,
-        //             to_,
-        //             deadline
-        //         );
         // }
         else {
             revert(
@@ -930,14 +718,213 @@ contract MultichainTradeProxy is
     }
 
     function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external virtual override returns (uint256[] memory amounts) {
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountIn,
+            uint256 amountOutMin,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountIn <= amount,
+            "MultichainTradeProxy: amountIn must less than amount"
+        );
+        require(
+            path[0] == token,
+            "MultichainTradeProxy: input token not equals path[0]"
+        );
         return
             _swapExactTokensForTokens(
+                amountIn,
+                amountOutMin,
+                path,
+                to,
+                deadline
+            );
+    }
+
+    function swapTokensForExactTokens(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountOut,
+            uint256 amountInMax,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountInMax <= amount,
+            "MultichainTradeProxy: amountInMax must less than amount"
+        );
+        require(
+            path[0] == token,
+            "MultichainTradeProxy: input token not equals path[0]"
+        );
+        return
+            _swapTokensForExactTokens(
+                amountOut,
+                amountInMax,
+                path,
+                to,
+                deadline
+            );
+    }
+
+    function swapTokensForExactETH(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountOut,
+            uint256 amountInMax,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountInMax <= amount,
+            "MultichainTradeProxy: swap amount has error"
+        );
+        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        return
+            _swapTokensForExactETH(amountOut, amountInMax, path, to, deadline);
+    }
+
+    function swapExactTokensForETH(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountIn,
+            uint256 amountOutMin,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountIn <= amount,
+            "MultichainTradeProxy: swap amount has error"
+        );
+        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        return
+            _swapExactTokensForETH(amountIn, amountOutMin, path, to, deadline);
+    }
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountIn,
+            uint256 amountOutMin,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountIn <= amount,
+            "MultichainTradeProxy: swap amount has error"
+        );
+        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        return
+            _swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                amountIn,
+                amountOutMin,
+                path,
+                to,
+                deadline
+            );
+    }
+
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        address token,
+        uint256 amount,
+        bytes calldata data
+    )
+        internal
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        (
+            uint256 amountIn,
+            uint256 amountOutMin,
+            address[] memory path,
+            address to,
+            uint256 deadline
+        ) = abi.decode(
+                data[4:],
+                (uint256, uint256, address[], address, uint256)
+            );
+        require(
+            amountIn <= amount,
+            "MultichainTradeProxy: swap amount has error"
+        );
+        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        return
+            _swapExactTokensForETHSupportingFeeOnTransferTokens(
                 amountIn,
                 amountOutMin,
                 path,
@@ -952,8 +939,120 @@ contract MultichainTradeProxy is
         address[] memory path,
         address to,
         uint256 deadline
-    ) internal virtual ensure(deadline) returns (uint256[] memory amounts) {
-        amounts = UniswapV2Library.getAmountsOut(
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
+        uint256[] memory amounts = UniswapV2Library.getAmountsOut(
+            SushiV2Factory,
+            amountIn,
+            path
+        );
+        require(
+            amounts[amounts.length - 1] >= amountOutMin,
+            "MultichainTradeProxy: INSUFFICIENT_OUTPUT_AMOUNT"
+        );
+        TransferHelper.safeTransfer(
+            path[0],
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
+            amounts[0]
+        );
+        (recvToken, receiver, recvAmount) = _swap(amounts, path, to);
+    }
+
+    function _swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] memory path,
+        address to,
+        uint256 deadline
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
+        uint256[] memory amounts = UniswapV2Library.getAmountsIn(
+            SushiV2Factory,
+            amountOut,
+            path
+        );
+        require(
+            amounts[0] <= amountInMax,
+            "UniswapV2Router: EXCESSIVE_INPUT_AMOUNT"
+        );
+        TransferHelper.safeTransfer(
+            path[0],
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
+            amounts[0]
+        );
+        (recvToken, receiver, recvAmount) = _swap(amounts, path, to);
+    }
+
+    function _swapTokensForExactETH(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] memory path,
+        address to,
+        uint256 deadline
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
+        require(path[path.length - 1] == WETH, "UniswapV2Router: INVALID_PATH");
+        uint256[] memory amounts = UniswapV2Library.getAmountsIn(
+            SushiV2Factory,
+            amountOut,
+            path
+        );
+        require(
+            amounts[0] <= amountInMax,
+            "UniswapV2Router: EXCESSIVE_INPUT_AMOUNT"
+        );
+        TransferHelper.safeTransfer(
+            path[0],
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
+            amounts[0]
+        );
+        (recvToken, receiver, recvAmount) = _swap(amounts, path, address(this));
+        IWETH(WETH).withdraw(amounts[amounts.length - 1]);
+        TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
+    }
+
+    function _swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] memory path,
+        address to,
+        uint256 deadline
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address recvToken,
+            address receiver,
+            uint256 recvAmount
+        )
+    {
+        require(path[path.length - 1] == WETH, "UniswapV2Router: INVALID_PATH");
+        uint256[] memory amounts = UniswapV2Library.getAmountsOut(
             SushiV2Factory,
             amountIn,
             path
@@ -962,13 +1061,87 @@ contract MultichainTradeProxy is
             amounts[amounts.length - 1] >= amountOutMin,
             "UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT"
         );
-        TransferHelper.safeTransferFrom(
+        TransferHelper.safeTransfer(
             path[0],
-            msg.sender,
             UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
             amounts[0]
         );
-        _swap(amounts, path, to);
+        (recvToken, receiver, recvAmount) = _swap(amounts, path, address(this));
+        IWETH(WETH).withdraw(amounts[amounts.length - 1]);
+        TransferHelper.safeTransferETH(to, amounts[amounts.length - 1]);
+    }
+
+    function _swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] memory path,
+        address to,
+        uint256 deadline
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        TransferHelper.safeTransfer(
+            path[0],
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
+            amountIn
+        );
+        uint256 balanceBefore = IERC20Uniswap(path[path.length - 1]).balanceOf(
+            to
+        );
+        _swapSupportingFeeOnTransferTokens(path, to);
+        require(
+            IERC20Uniswap(path[path.length - 1]).balanceOf(to).sub(
+                balanceBefore
+            ) >= amountOutMin,
+            "UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT"
+        );
+        return (
+            path[path.length - 1],
+            to,
+            IERC20Uniswap(path[path.length - 1]).balanceOf(to).sub(
+                balanceBefore
+            )
+        );
+    }
+
+    function _swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] memory path,
+        address to,
+        uint256 deadline
+    )
+        internal
+        virtual
+        ensure(deadline)
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
+        require(path[path.length - 1] == WETH, "UniswapV2Router: INVALID_PATH");
+        TransferHelper.safeTransfer(
+            path[0],
+            UniswapV2Library.pairFor(SushiV2Factory, path[0], path[1]),
+            amountIn
+        );
+        _swapSupportingFeeOnTransferTokens(path, address(this));
+        uint256 amountOut = IERC20Uniswap(WETH).balanceOf(address(this));
+        require(
+            amountOut >= amountOutMin,
+            "UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT"
+        );
+        IWETH(WETH).withdraw(amountOut);
+        TransferHelper.safeTransferETH(to, amountOut);
+        return (path[path.length - 1], to, amountOut);
     }
 
     // **** SWAP ****
@@ -977,7 +1150,15 @@ contract MultichainTradeProxy is
         uint256[] memory amounts,
         address[] memory path,
         address _to
-    ) internal virtual {
+    )
+        internal
+        virtual
+        returns (
+            address,
+            address,
+            uint256
+        )
+    {
         for (uint256 i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0, ) = UniswapV2Library.sortTokens(input, output);
@@ -991,6 +1172,46 @@ contract MultichainTradeProxy is
             IUniswapV2Pair(
                 UniswapV2Library.pairFor(SushiV2Factory, input, output)
             ).swap(amount0Out, amount1Out, to, new bytes(0));
+        }
+        return (path[path.length - 1], _to, amounts[amounts.length - 1]);
+    }
+
+    // **** SWAP (supporting fee-on-transfer tokens) ****
+    // requires the initial amount to have already been sent to the first pair
+    function _swapSupportingFeeOnTransferTokens(
+        address[] memory path,
+        address _to
+    ) internal virtual {
+        for (uint256 i; i < path.length - 1; i++) {
+            (address input, address output) = (path[i], path[i + 1]);
+            (address token0, ) = UniswapV2Library.sortTokens(input, output);
+            IUniswapV2Pair pair = IUniswapV2Pair(
+                UniswapV2Library.pairFor(SushiV2Factory, input, output)
+            );
+            uint256 amountInput;
+            uint256 amountOutput;
+            {
+                // scope to avoid stack too deep errors
+                (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+                (uint256 reserveInput, uint256 reserveOutput) = input == token0
+                    ? (reserve0, reserve1)
+                    : (reserve1, reserve0);
+                amountInput = IERC20Uniswap(input).balanceOf(address(pair)).sub(
+                        reserveInput
+                    );
+                amountOutput = UniswapV2Library.getAmountOut(
+                    amountInput,
+                    reserveInput,
+                    reserveOutput
+                );
+            }
+            (uint256 amount0Out, uint256 amount1Out) = input == token0
+                ? (uint256(0), amountOutput)
+                : (amountOutput, uint256(0));
+            address to = i < path.length - 2
+                ? UniswapV2Library.pairFor(SushiV2Factory, output, path[i + 2])
+                : _to;
+            pair.swap(amount0Out, amount1Out, to, new bytes(0));
         }
     }
 }
