@@ -1,17 +1,15 @@
 const eth = require('./utils/eth');
 const ABIS = require('./utils/abis')
-// const privateKey = '30237812841dfc13d8e8674237c6f615967ce01402cb8d93519b6523d6cd9ff2';
-// const network = 'https://data-seed-prebsc-1-s1.binance.org:8545';
+const config = require('./config/config')
 const interface = eth.loadInterface(ABIS.UniswapV2Router02.abi);
-const network = 'http://localhost:8545';
-const privateKey = '0x71258b4531a75e7a67b6e02df2ea26a878032bd749bfd6a79dc7df68b95a4d5a';
+
 const amount = 100000;
 const BiggerAmount = '100000000000000';
 
 async function start() {
 
     // mock wallet
-    const wallet = await eth.loadWallet(privateKey, network);
+    const wallet = await eth.loadWallet(config.privateKey, config.network);
     console.log(`wallet:${wallet.address}`)
 
     // deploy tokenA and tokenB then return their address
