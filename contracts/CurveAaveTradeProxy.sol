@@ -21,22 +21,19 @@ interface ITradeProxy {
         );
 }
 
-interface ICurve {
+interface ICurveAave {
     function coins(uint256 index) external view returns (address);
-
     function underlying_coins(uint256 index) external view returns (address);
+
+    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
+    function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
 }
 
-contract TradeProxy_Curve is MPCManageable, ITradeProxy {
+contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
     using Address for address;
     using SafeERC20 for IERC20;
 
-    mapping(address => bool) public supportedPools;
-
-    bytes4 constant Exchange_Selector =
-        bytes4(keccak256("exchange(int128,int128,uint256,uint256)"));
-    bytes4 constant Exchange_Underlying_Selector =
-        bytes4(keccak256("exchange_underlying(int128,int128,uint256,uint256)"));
+    mapping(address => bool) public supportedPool;
 
     struct TradeInfo {
         address pool;
@@ -50,7 +47,7 @@ contract TradeProxy_Curve is MPCManageable, ITradeProxy {
 
     constructor(address _mpc, address[] memory pools) MPCManageable(_mpc) {
         for (uint256 i = 0; i < pools.length; i++) {
-            supportedPools[pools[i]] = true;
+            supportedPool[pools[i]] = true;
         }
     }
 
@@ -72,13 +69,13 @@ contract TradeProxy_Curve is MPCManageable, ITradeProxy {
 
     function addSupportedPools(address[] calldata pools) external onlyMPC {
         for (uint256 i = 0; i < pools.length; i++) {
-            supportedPools[pools[i]] = true;
+            supportedPool[pools[i]] = true;
         }
     }
 
     function removeSupportedPools(address[] calldata pools) external onlyMPC {
         for (uint256 i = 0; i < pools.length; i++) {
-            supportedPools[pools[i]] = false;
+            supportedPool[pools[i]] = false;
         }
     }
 
@@ -96,67 +93,32 @@ contract TradeProxy_Curve is MPCManageable, ITradeProxy {
     {
         TradeInfo memory t = decode_trade_info(data);
         require(t.deadline >= block.timestamp, "TradeProxy: expired");
+        require(supportedPool[t.pool], "TradeProxy: unsupported pool");
 
-        address pool = t.pool;
-        require(supportedPools[pool], "TradeProxy: unsupported pool");
+        ICurveAave pool = ICurveAave(t.pool);
+
+        receiver = t.receiver;
+
+        uint256 i = uint256(uint128(t.i));
+        uint256 j = uint256(uint128(t.j));
 
         address srcToken;
-        {
-            uint256 i = uint256(uint128(t.i));
-            uint256 j = uint256(uint128(t.j));
-            if (t.is_exchange_underlying) {
-                srcToken = ICurve(pool).coins(i);
-                recvToken = ICurve(pool).coins(j);
-            } else {
-                srcToken = ICurve(pool).underlying_coins(i);
-                recvToken = ICurve(pool).underlying_coins(j);
-            }
+        if (t.is_exchange_underlying) {
+            srcToken = pool.underlying_coins(i);
+            recvToken = pool.underlying_coins(j);
+        } else {
+            srcToken = pool.coins(i);
+            recvToken = pool.coins(j);
         }
         require(token == srcToken, "TradeProxy: source token mismatch");
         require(recvToken != address(0), "TradeProxy: zero receive token");
 
-        uint256 old_balance = IERC20(recvToken).balanceOf(address(this));
-
         if (t.is_exchange_underlying) {
-            call_exchange_underlying(pool, t.i, t.j, amount, t.min_dy);
+            recvAmount = pool.exchange_underlying(t.i, t.j, amount, t.min_dy);
         } else {
-            call_exchange(pool, t.i, t.j, amount, t.min_dy);
+            recvAmount = pool.exchange(t.i, t.j, amount, t.min_dy);
         }
 
-        uint256 new_balance = IERC20(recvToken).balanceOf(address(this));
-
-        receiver = t.receiver;
-        recvAmount = new_balance - old_balance;
         IERC20(recvToken).safeTransfer(receiver, recvAmount);
-    }
-
-    function call_exchange(
-        address pool,
-        int128 i,
-        int128 j,
-        uint256 dx,
-        uint256 min_dy
-    ) internal {
-        pool.functionCall(
-            abi.encodeWithSelector(Exchange_Selector, i, j, dx, min_dy)
-        );
-    }
-
-    function call_exchange_underlying(
-        address pool,
-        int128 i,
-        int128 j,
-        uint256 dx,
-        uint256 min_dy
-    ) internal {
-        pool.functionCall(
-            abi.encodeWithSelector(
-                Exchange_Underlying_Selector,
-                i,
-                j,
-                dx,
-                min_dy
-            )
-        );
     }
 }
