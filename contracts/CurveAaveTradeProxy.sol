@@ -2,8 +2,6 @@
 
 pragma solidity ^0.8.10;
 
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./MPCManageable.sol";
 
@@ -30,9 +28,9 @@ interface ICurveAave {
 }
 
 contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
-    using Address for address;
     using SafeERC20 for IERC20;
 
+    mapping(address => bool) public supportedTradeProxyManager;
     mapping(address => bool) public supportedPool;
 
     struct TradeInfo {
@@ -45,7 +43,12 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
         uint256 min_dy;
     }
 
-    constructor(address _mpc, address[] memory pools) MPCManageable(_mpc) {
+    constructor(
+        address _mpc,
+        address _tradeProxyManager,
+        address[] memory pools
+    ) MPCManageable(_mpc) {
+        supportedTradeProxyManager[_tradeProxyManager] = true;
         for (uint256 i = 0; i < pools.length; i++) {
             supportedPool[pools[i]] = true;
         }
@@ -65,6 +68,14 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
         returns (TradeInfo memory)
     {
         return abi.decode(data, (TradeInfo));
+    }
+
+    function addSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
+        supportedTradeProxyManager[tradeProxyManager] = true;
+    }
+
+    function removeSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
+        supportedTradeProxyManager[tradeProxyManager] = false;
     }
 
     function addSupportedPools(address[] calldata pools) external onlyMPC {
@@ -91,6 +102,8 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
             uint256 recvAmount
         )
     {
+        require(supportedTradeProxyManager[msg.sender], "TradeProxy: Forbidden");
+
         TradeInfo memory t = decode_trade_info(data);
         require(t.deadline >= block.timestamp, "TradeProxy: expired");
         require(supportedPool[t.pool], "TradeProxy: unsupported pool");
