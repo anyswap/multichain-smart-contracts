@@ -3,7 +3,7 @@ const ABIS = require('./utils/abis')
 const config = require('./config/config')
 const interface = eth.loadInterface(ABIS.UniswapV2Router02.abi);
 
-const amount = 100000;
+const amount = 100000000;
 const BiggerAmount = '100000000000000';
 
 async function start() {
@@ -15,19 +15,10 @@ async function start() {
     // deploy tokenA and tokenB then return their address
     const { tokenA, tokenB } = await getTokens(wallet);
 
+    const weth = await getWETH(wallet);
+
     // deploy sushiFactory then return address
     const factory = await getFactory(wallet);
-
-    // add init liquidity to pair for tokenA and tokenB by sushiRouter
-    // await addLiquidityByRouter(wallet, factory, tokenA, tokenB);
-
-    // add init liquidity to pair for tokenA and tokenB by transfer to pair
-    await addLiquidityByTransfer(wallet, factory, tokenA, tokenB);
-
-    // get tokenA and tokenB balances of pair and get liquidity balances of wallet before test
-    await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
-        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
-    });
 
     /**
      * real test 
@@ -47,7 +38,7 @@ async function start() {
         // 1) deploy TradeProxyManager contract
         const tradeProxyManager = await getTradeProxyManager(wallet);
         // 2) deploy SushiswapTradeProxy contract
-        const sushiswapTradeProxy = await getSushiswapTradeProxy(wallet, tradeProxyManager, factory);
+        const sushiswapTradeProxy = await getSushiswapTradeProxy(wallet, tradeProxyManager, factory, weth);
         // 3) call TradeProxyManage.addTradeProxy()
         const tradeProxyManagerContract = await loadTradeProxyManager(tradeProxyManager, wallet);
         await tradeProxyManagerContract.addTradeProxy(sushiswapTradeProxy)
@@ -75,22 +66,15 @@ async function start() {
         );
         // 10) call MultichainRouter.anySwapInAndExec() on desc chain
         const multichainRouterContract = await loadMultichainRouter(multichainRouter, wallet);
-        const data = interface.encodeFunctionData('swapExactTokensForTokens', [
-            amount, 0, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256
-        ])
 
-        await multichainRouterContract.anySwapInAndExec(
-            '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
-        ).then(
-            res => console.log(`anySwapInAndExec: ${res.hash}`)
-        )
+        // test between token and token
+        // await testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy);
+
+        // test between native and token
+        await testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy);
+
         // 11) check all tx res
     }
-
-    // get tokenA and tokenB balances of pair and get liquidity balances of wallet after test
-    await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
-        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
-    });
 };
 
 // deploy multichainRouter and return address
@@ -108,6 +92,15 @@ async function getTradeProxyManager(wallet) {
     const TradeProxyManager_factory = eth.deployContract(ABIS.TradeProxyManager.abi, ABIS.TradeProxyManager.data.bytecode, wallet);
     return await TradeProxyManager_factory.deploy(wallet.address).then(res => {
         console.log(`TradeProxyManager address:${res.address}`);
+        return res.address;
+    });
+}
+
+// deploy WETH and return address
+async function getWETH(wallet) {
+    const WETH9_factory = eth.deployContract(ABIS.WETH9.abi, ABIS.WETH9.data.bytecode, wallet);
+    return await WETH9_factory.deploy().then(res => {
+        console.log(`WETH9 address:${res.address}`);
         return res.address;
     });
 }
@@ -149,9 +142,9 @@ async function getSushiRouter(wallet, factory) {
 }
 
 // deploy sushiswapTradeProxy and return address
-async function getSushiswapTradeProxy(wallet, tradeProxyManager, factory) {
+async function getSushiswapTradeProxy(wallet, tradeProxyManager, factory, weth) {
     const SushiswapTradeProxy_factory = eth.deployContract(ABIS.SushiswapTradeProxy.abi, ABIS.SushiswapTradeProxy.data.bytecode, wallet)
-    return await SushiswapTradeProxy_factory.deploy(tradeProxyManager, factory, eth.constant.AddressZero).then(res => {
+    return await SushiswapTradeProxy_factory.deploy(tradeProxyManager, factory, weth).then(res => {
         console.log(`SushiswapTradeProxy address:${res.address}`);
         return res.address;
     });
@@ -180,6 +173,11 @@ async function loadPair(pair, wallet) {
 // load token contract instance
 async function loadToken(token, wallet) {
     return eth.loadContract(token, ABIS.AnyswapV6ERC20.abi, wallet);
+}
+
+// load weth contract instance
+async function loadWeth(weth, wallet) {
+    return eth.loadContract(weth, ABIS.WETH9.abi, wallet);
 }
 
 // load tradeProxyManager contract instance
@@ -219,6 +217,15 @@ async function mintAndTransfer(token, reciept, amount, wallet) {
         .then(res => console.log(`tokenAContract transfer from :${res.hash}`));
 }
 
+// deposit to wallet and transfer to pair
+async function depositAndTransfer(weth, reciept, amount, wallet) {
+    const wethContract = await loadWeth(weth, wallet);
+    await wethContract.deposit({ value: amount })
+        .then(res => console.log(`wethContract deposit:${res.hash}`));
+    await wethContract.transferFrom(wallet.address, reciept, amount)
+        .then(res => console.log(`wethContract transfer from :${res.hash}`));
+}
+
 // add init liquidity by sushiRouter
 async function addLiquidityByRouter(wallet, factory, tokenA, tokenB) {
     // get sushiRouter
@@ -234,7 +241,7 @@ async function addLiquidityByRouter(wallet, factory, tokenA, tokenB) {
 }
 
 // add init liquidity by transfer
-async function addLiquidityByTransfer(wallet, factory, tokenA, tokenB) {
+async function addTokenLiquidityByTransfer(wallet, factory, tokenA, tokenB) {
     // create pair for tokenA and tokenB
     const factoryContract = await loadFactory(factory, wallet);
     await factoryContract.createPair(tokenA, tokenB)
@@ -252,26 +259,23 @@ async function addLiquidityByTransfer(wallet, factory, tokenA, tokenB) {
         .then(res => console.log(`pairContract mint :${res.hash}`));
 }
 
-// exec sushiTradeProxy function
-async function testExec(wallet, factory, tokenA, tokenB) {
-    const tradeProxy = await getSushiswapTradeProxy(wallet, factory);
-    const tradeProxyContract = await loadTradProxy(tradeProxy, wallet);
+// add init liquidity by transfer
+async function addNativeLiquidityByTransfer(wallet, factory, tokenA, weth) {
+    // create pair for tokenA and weth
+    const factoryContract = await loadFactory(factory, wallet);
+    await factoryContract.createPair(tokenA, weth)
+        .then(res => console.log(`create pair:${res.hash}`))
+    // get pair for tokenA and weth
+    const pair = await factoryContract.getPair(tokenA, weth)
+        .then(res => { console.log(`get pair:${res}`); return res })
 
-    const tokenContract = await loadToken(tokenA, wallet);
-    await tokenContract.approve(tradeProxy, eth.constant.MaxUint256)
-        .then(res => console.log(`tokenContract approve:${res.hash}`));
+    // transfer token to pair for tokenA and weth
+    await mintAndTransfer(tokenA, pair, amount, wallet);
+    await depositAndTransfer(weth, pair, amount, wallet);
 
-    const interface = eth.loadInterface(ABIS.UniswapV2Router02.abi);
-    const data = interface.encodeFunctionData('swapExactTokensForTokens', [
-        amount, 0, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256
-    ])
-    console.log(`calldata:${data}`)
-
-    return await tradeProxyContract.exec(tokenA, amount, data)
-        .then(res => {
-            console.log(`tradeProxyContract exec:${res.hash}`);
-            return res.hash
-        })
+    const pairContract = await loadPair(pair, wallet);
+    await pairContract.mint(wallet.address)
+        .then(res => console.log(`pairContract mint :${res.hash}`));
 }
 
 // get tokenA and tokenB balances of pair and get liquidity balances of wallet
@@ -296,5 +300,68 @@ async function getBalanceAndLiquidity(wallet, factory, tokenA, tokenB) {
     }
 }
 
+async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy) {
+    // add init liquidity to pair for tokenA and tokenB by sushiRouter
+    // await addLiquidityByRouter(wallet, factory, tokenA, tokenB);
+
+    // add init liquidity to pair for tokenA and tokenB by transfer to pair
+    await addTokenLiquidityByTransfer(wallet, factory, tokenA, tokenB);
+
+    // get tokenA and tokenB balances of pair and get liquidity balances of wallet before test
+    await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
+        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
+
+    // test swapExactTokensForTokens
+    const data = interface.encodeFunctionData('swapExactTokensForTokens', [
+        amount, 0, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256
+    ])
+
+    // test swapTokensForExactTokens
+    // const data = interface.encodeFunctionData('swapTokensForExactTokens', [
+    //     amount / 4, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256
+    // ])
+
+    await multichainRouterContract.anySwapInAndExec(
+        '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
+    ).then(
+        res => console.log(`anySwapInAndExec: ${res.hash}`)
+    )
+
+    // get tokenA and tokenB balances of pair and get liquidity balances of wallet after test
+    await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
+        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
+}
+
+async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy) {
+    // add init liquidity to pair for tokenA and weth by transfer to pair
+    await addNativeLiquidityByTransfer(wallet, factory, tokenA, weth);
+    // get tokenA and weth balances of pair and get liquidity balances of wallet before test
+    await getBalanceAndLiquidity(wallet, factory, tokenA, weth).then(res => {
+        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair weth balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
+
+    // test swapTokensForExactETH 
+    const data = interface.encodeFunctionData('swapTokensForExactETH', [
+        amount / 4, amount, [tokenA, weth], wallet.address, eth.constant.MaxUint256
+    ])
+
+    // test swapExactTokensForETH 
+    // const data = interface.encodeFunctionData('swapExactTokensForETH', [
+    // amount, 0, [tokenA, weth], wallet.address, eth.constant.MaxUint256
+    // ])
+
+    await multichainRouterContract.anySwapInAndExec(
+        '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
+    ).then(
+        res => console.log(`anySwapInAndExec: ${res.hash}`)
+    )
+
+    // get tokenA and weth balances of pair and get liquidity balances of wallet after test
+    await getBalanceAndLiquidity(wallet, factory, tokenA, weth).then(res => {
+        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+    });
+}
 // start function
 start()

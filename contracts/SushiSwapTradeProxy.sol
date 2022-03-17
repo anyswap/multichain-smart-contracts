@@ -882,4 +882,10 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             pair.swap(amount0Out, amount1Out, to, new bytes(0));
         }
     }
+
+    fallback() external payable {
+    }
+
+    receive() external payable {
+    }
 }
