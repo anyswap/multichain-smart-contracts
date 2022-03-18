@@ -73,6 +73,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     address public feeCalc;
     address public immutable wNATIVE;
 
+    mapping(bytes32 => bool) public swapinExisted;
+
     event LogAnySwapIn(
         bytes32 indexed txhash,
         address indexed token,
@@ -373,6 +375,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         assert(IRouter(token).mint(to, amount));
         emit LogAnySwapIn(txs, token, to, amount, fromChainID, block.chainid);
     }
@@ -385,6 +389,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         require(
             IUnderlying(token).underlying() != address(0),
             "MultichainRouter: zero underlying"
@@ -402,6 +408,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
             IUnderlying(token).underlying() == wNATIVE,
@@ -422,6 +430,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         address _underlying = IUnderlying(token).underlying();
         if (
             _underlying != address(0) &&
@@ -450,6 +460,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         address tradeProxy,
         bytes calldata data
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         require(
             msg.sender != tradeProxy,
             "MultichainRouter: forbid call swapin from tradeProxy"
@@ -486,6 +498,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         address tradeProxy,
         bytes calldata data
     ) external nonReentrant onlyMPC {
+        require(!swapinExisted[txs], "swapin existed");
+        swapinExisted[txs] = true;
         require(
             msg.sender != tradeProxy,
             "MultichainRouter: forbid call swapin from tradeProxy"

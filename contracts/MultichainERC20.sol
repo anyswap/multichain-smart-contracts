@@ -27,6 +27,8 @@ contract MultichainERC20 is ERC20Capped, ERC20Burnable, ERC20Permit, AccessContr
 
     uint8 immutable _tokenDecimals;
 
+    mapping(bytes32 => bool) public swapinExisted;
+
     event LogSwapin(bytes32 indexed txhash, address indexed account, uint256 amount);
     event LogSwapout(address indexed account, address indexed bindaddr, uint256 amount);
 
@@ -91,6 +93,8 @@ contract MultichainERC20 is ERC20Capped, ERC20Burnable, ERC20Permit, AccessContr
     }
 
     function Swapin(bytes32 txhash, address account, uint256 amount) external onlyRole(MINTER_ROLE) returns (bool) {
+        require(!swapinExisted[txhash], "swapin existed");
+        swapinExisted[txhash] = true;
         _mint(account, amount);
         emit LogSwapin(txhash, account, amount);
         return true;
