@@ -323,8 +323,8 @@ async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRout
     const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
     console.log(`decodeData:${decodeData}`)
     const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
-    await tradeProxyContract.decode_trade_info(data).then(
-        res => console.log(`encode:${data} \n decode_trade_info:${res}`)
+    await tradeProxyContract.decode_anycall_info(data).then(
+        res => console.log(`encode:${data} \n decode_anycall_info:${res}`)
     )
     await multichainRouterContract.anySwapInAndExec(
         '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
@@ -359,8 +359,8 @@ async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRoute
     const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
     console.log(`decodeData:${decodeData}`)
     const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
-    await tradeProxyContract.decode_trade_info(data).then(
-        res => console.log(`encode:${data} \n decode_trade_info:${res}`)
+    await tradeProxyContract.decode_anycall_info(data).then(
+        res => console.log(`encode:${data} \n decode_anycall_info:${res}`)
     )
     await multichainRouterContract.anySwapInAndExec(
         '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data

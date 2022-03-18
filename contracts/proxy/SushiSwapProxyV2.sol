@@ -194,7 +194,6 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
-
 contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
     using SafeMathUniswap for uint256;
 
@@ -231,6 +230,12 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         bool toNative;
     }
 
+    struct AnycallRes {
+        address recvToken;
+        address receiver;
+        uint256 recvAmount;
+    }
+
     function encode_anycall_info(AnycallInfo calldata info)
         public
         pure
@@ -247,11 +252,27 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         return abi.decode(data, (AnycallInfo));
     }
 
+    function encode_anycall_res(AnycallRes memory res)
+        public
+        pure
+        returns (bytes memory)
+    {
+        return abi.encode(res);
+    }
+
+    function decode_anycall_res(bytes memory data)
+        public
+        pure
+        returns (AnycallRes memory)
+    {
+        return abi.decode(data, (AnycallRes));
+    }
+
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool success, bytes memory result){
+    ) external returns (bool success, bytes memory result) {
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
         require(
             anycallInfo.deadline >= block.timestamp,
@@ -260,7 +281,10 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
 
         address[] memory path = anycallInfo.path;
         require(path.length >= 2, "SushiSwapAnycallProxy: invalid path length");
-        require(path[0] == token, "SushiSwapAnycallProxy: source token mismatch");
+        require(
+            path[0] == token,
+            "SushiSwapAnycallProxy: source token mismatch"
+        );
 
         require(
             anycallInfo.amountInMax <= amount,
@@ -295,10 +319,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
                 address(this)
             );
             IwNATIVE(wNATIVE).withdraw(recvAmount);
-            TransferHelper.safeTransferNATIVE(
-                anycallInfo.receiver,
-                recvAmount
-            );
+            TransferHelper.safeTransferNATIVE(anycallInfo.receiver, recvAmount);
             recvToken = address(0);
             receiver = anycallInfo.receiver;
         } else {
@@ -319,7 +340,10 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
             emit TokenBack(token, receiver, amount.sub(amounts[0]));
         }
 
-        return (true, abi.encode(recvToken, receiver, recvAmount));
+        return (
+            true,
+            encode_anycall_res(AnycallRes(recvToken, receiver, recvAmount))
+        );
     }
 
     function swapTokensForExactTokens(AnycallInfo memory anycallInfo)
