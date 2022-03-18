@@ -303,10 +303,10 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
                 path,
                 address(this)
             );
-            IwNATIVE(wNATIVE).withdraw(amounts[amounts.length - 1]);
+            IwNATIVE(wNATIVE).withdraw(recvAmount);
             TransferHelper.safeTransferNATIVE(
                 tradeInfo.receiver,
-                amounts[amounts.length - 1]
+                recvAmount
             );
             recvToken = address(0);
             receiver = tradeInfo.receiver;
@@ -322,7 +322,7 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
         if (amount.sub(amounts[0]) > 0) {
             TransferHelper.safeTransfer(
                 path[0],
-                tradeInfo.receiver,
+                receiver,
                 amount.sub(amounts[0])
             );
             emit TokenBack(token, receiver, amount.sub(amounts[0]));
@@ -357,7 +357,7 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
         );
 
         require(
-            amounts[amounts.length - 1] >= tradeInfo.amountOut,
+            amounts[amounts.length - 1] >= tradeInfo.amountOutMin,
             "SushiSwapTradeProxy: INSUFFICIENT_OUTPUT_AMOUNT"
         );
     }

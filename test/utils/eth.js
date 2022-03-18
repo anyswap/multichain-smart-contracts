@@ -22,6 +22,10 @@ eth.loadInterface = function (abi) {
     return new ethers.utils.Interface(abi);
 }
 
+eth.loadAbiCoder = function () {
+    return ethers.utils.defaultAbiCoder;
+}
+
 eth.constant = ethers.constants;
 
 module.exports = eth;

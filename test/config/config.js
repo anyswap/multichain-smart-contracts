@@ -1,6 +1,6 @@
 const config = {
     network: 'http://localhost:8545',
-    privateKey: '0x88af0ea4119caf545bc0cbadfc2e29e4e066fd18bef5e529cdab75db4da318eb'
+    privateKey: '0x9fe89fe70e96511154fbdfaa2a2ce9be09f23147527450759faa717c0b552ba8'
 }
 
 module.exports = config
