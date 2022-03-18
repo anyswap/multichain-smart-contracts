@@ -5,18 +5,12 @@ pragma solidity ^0.8.10;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./MPCManageable.sol";
 
-interface ITradeProxy {
+interface IAnycallProxy {
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        );
+    ) external returns (bool success, bytes memory result);
 }
 
 interface ICurveAave {
@@ -27,13 +21,13 @@ interface ICurveAave {
     function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
 }
 
-contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
+contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
     using SafeERC20 for IERC20;
 
-    mapping(address => bool) public supportedTradeProxyManager;
+    mapping(address => bool) public supportedCaller;
     mapping(address => bool) public supportedPool;
 
-    struct TradeInfo {
+    struct AnycallInfo {
         address pool;
         address receiver;
         bool is_exchange_underlying;
@@ -45,16 +39,16 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
 
     constructor(
         address _mpc,
-        address _tradeProxyManager,
+        address _caller,
         address[] memory pools
     ) MPCManageable(_mpc) {
-        supportedTradeProxyManager[_tradeProxyManager] = true;
+        supportedCaller[_caller] = true;
         for (uint256 i = 0; i < pools.length; i++) {
             supportedPool[pools[i]] = true;
         }
     }
 
-    function encode_trade_info(TradeInfo calldata info)
+    function encode_anycall_info(AnycallInfo calldata info)
         public
         pure
         returns (bytes memory)
@@ -62,20 +56,20 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
         return abi.encode(info);
     }
 
-    function decode_trade_info(bytes memory data)
+    function decode_anycall_info(bytes memory data)
         public
         pure
-        returns (TradeInfo memory)
+        returns (AnycallInfo memory)
     {
-        return abi.decode(data, (TradeInfo));
+        return abi.decode(data, (AnycallInfo));
     }
 
-    function addSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
-        supportedTradeProxyManager[tradeProxyManager] = true;
+    function addSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = true;
     }
 
-    function removeSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
-        supportedTradeProxyManager[tradeProxyManager] = false;
+    function removeSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = false;
     }
 
     function addSupportedPools(address[] calldata pools) external onlyMPC {
@@ -94,28 +88,20 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        )
-    {
-        require(supportedTradeProxyManager[msg.sender], "TradeProxy: Forbidden");
+    ) external returns (bool success, bytes memory result) {
+        require(supportedCaller[msg.sender], "AnycallProxy: Forbidden");
 
-        TradeInfo memory t = decode_trade_info(data);
-        require(t.deadline >= block.timestamp, "TradeProxy: expired");
-        require(supportedPool[t.pool], "TradeProxy: unsupported pool");
+        AnycallInfo memory t = decode_anycall_info(data);
+        require(t.deadline >= block.timestamp, "AnycallProxy: expired");
+        require(supportedPool[t.pool], "AnycallProxy: unsupported pool");
 
         ICurveAave pool = ICurveAave(t.pool);
-
-        receiver = t.receiver;
 
         uint256 i = uint256(uint128(t.i));
         uint256 j = uint256(uint128(t.j));
 
         address srcToken;
+        address recvToken;
         if (t.is_exchange_underlying) {
             srcToken = pool.underlying_coins(i);
             recvToken = pool.underlying_coins(j);
@@ -123,15 +109,18 @@ contract TradeProxy_CurveAave is MPCManageable, ITradeProxy {
             srcToken = pool.coins(i);
             recvToken = pool.coins(j);
         }
-        require(token == srcToken, "TradeProxy: source token mismatch");
-        require(recvToken != address(0), "TradeProxy: zero receive token");
+        require(token == srcToken, "AnycallProxy: source token mismatch");
+        require(recvToken != address(0), "AnycallProxy: zero receive token");
 
+        uint256 recvAmount;
         if (t.is_exchange_underlying) {
             recvAmount = pool.exchange_underlying(t.i, t.j, amount, t.min_dy);
         } else {
             recvAmount = pool.exchange(t.i, t.j, amount, t.min_dy);
         }
 
-        IERC20(recvToken).safeTransfer(receiver, recvAmount);
+        IERC20(recvToken).safeTransfer(t.receiver, recvAmount);
+
+        return (true, abi.encode(recvToken, t.receiver, recvAmount));
     }
 }

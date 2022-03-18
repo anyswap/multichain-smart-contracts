@@ -186,21 +186,15 @@ library TransferHelper {
     }
 }
 
-interface ITradeProxy {
+interface IAnycallProxy {
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        );
+    ) external returns (bool success, bytes memory result);
 }
 
-contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
+contract SushiSwapAnycallProxy is IAnycallProxy, MPCManageable {
     using SafeMathUniswap for uint256;
 
     address public immutable SushiV2Factory; // 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac
@@ -224,15 +218,10 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        onlyMPC
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        )
-    {
+    ) external returns (bool success, bytes memory result) {
+        address recvToken;
+        address receiver;
+        uint256 recvAmount;
         bytes4 sig = bytes4(data[:4]);
         if (
             sig ==
@@ -380,9 +369,11 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
         // }
         else {
             revert(
-                "MultichainTradeProxy: This tradeProxy not support to parse param data!"
+                "MultichainAnycallProxy: This anycallProxy not support to parse param data!"
             );
         }
+
+        return (true, abi.encode(recvToken, receiver, recvAmount));
     }
 
     function swapExactTokensForTokens(
@@ -409,11 +400,11 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountIn <= amount,
-            "MultichainTradeProxy: amountIn must less than amount"
+            "MultichainAnycallProxy: amountIn must less than amount"
         );
         require(
             path[0] == token,
-            "MultichainTradeProxy: input token not equals path[0]"
+            "MultichainAnycallProxy: input token not equals path[0]"
         );
         return
             _swapExactTokensForTokens(
@@ -449,11 +440,11 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountInMax <= amount,
-            "MultichainTradeProxy: amountInMax must less than amount"
+            "MultichainAnycallProxy: amountInMax must less than amount"
         );
         require(
             path[0] == token,
-            "MultichainTradeProxy: input token not equals path[0]"
+            "MultichainAnycallProxy: input token not equals path[0]"
         );
         return
             _swapTokensForExactTokens(
@@ -489,9 +480,9 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountInMax <= amount,
-            "MultichainTradeProxy: swap amount has error"
+            "MultichainAnycallProxy: swap amount has error"
         );
-        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        require(path[0] == token, "MultichainAnycallProxy: swap token has error");
         return
             _swapTokensForExactETH(amountOut, amountInMax, path, to, deadline);
     }
@@ -520,9 +511,9 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountIn <= amount,
-            "MultichainTradeProxy: swap amount has error"
+            "MultichainAnycallProxy: swap amount has error"
         );
-        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        require(path[0] == token, "MultichainAnycallProxy: swap token has error");
         return
             _swapExactTokensForETH(amountIn, amountOutMin, path, to, deadline);
     }
@@ -551,9 +542,9 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountIn <= amount,
-            "MultichainTradeProxy: swap amount has error"
+            "MultichainAnycallProxy: swap amount has error"
         );
-        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        require(path[0] == token, "MultichainAnycallProxy: swap token has error");
         return
             _swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 amountIn,
@@ -588,9 +579,9 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
             );
         require(
             amountIn <= amount,
-            "MultichainTradeProxy: swap amount has error"
+            "MultichainAnycallProxy: swap amount has error"
         );
-        require(path[0] == token, "MultichainTradeProxy: swap token has error");
+        require(path[0] == token, "MultichainAnycallProxy: swap token has error");
         return
             _swapExactTokensForETHSupportingFeeOnTransferTokens(
                 amountIn,
@@ -624,7 +615,7 @@ contract SushiSwapTradeProxy is ITradeProxy, MPCManageable {
         );
         require(
             amounts[amounts.length - 1] >= amountOutMin,
-            "MultichainTradeProxy: INSUFFICIENT_OUTPUT_AMOUNT"
+            "MultichainAnycallProxy: INSUFFICIENT_OUTPUT_AMOUNT"
         );
         TransferHelper.safeTransfer(
             path[0],

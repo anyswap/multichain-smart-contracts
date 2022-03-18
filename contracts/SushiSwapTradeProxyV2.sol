@@ -186,21 +186,16 @@ library TransferHelper {
     }
 }
 
-interface ITradeProxy {
+interface IAnycallProxy {
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        );
+    ) external returns (bool success, bytes memory result);
 }
 
-contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
+
+contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
     using SafeMathUniswap for uint256;
 
     address public immutable SushiV2Factory; // 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac
@@ -226,7 +221,7 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
         wNATIVE = wNATIVE_;
     }
 
-    struct TradeInfo {
+    struct AnycallInfo {
         uint256 amountOut;
         uint256 amountOutMin;
         uint256 amountInMax;
@@ -236,7 +231,7 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
         bool toNative;
     }
 
-    function encode_trade_info(TradeInfo calldata info)
+    function encode_anycall_info(AnycallInfo calldata info)
         public
         pure
         returns (bytes memory)
@@ -244,47 +239,39 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
         return abi.encode(info);
     }
 
-    function decode_trade_info(bytes memory data)
+    function decode_anycall_info(bytes memory data)
         public
         pure
-        returns (TradeInfo memory)
+        returns (AnycallInfo memory)
     {
-        return abi.decode(data, (TradeInfo));
+        return abi.decode(data, (AnycallInfo));
     }
 
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        onlyMPC
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        )
-    {
-        TradeInfo memory tradeInfo = decode_trade_info(data);
+    ) external returns (bool success, bytes memory result){
+        AnycallInfo memory anycallInfo = decode_anycall_info(data);
         require(
-            tradeInfo.deadline >= block.timestamp,
-            "SushiSwapTradeProxy: EXPIRED"
+            anycallInfo.deadline >= block.timestamp,
+            "SushiSwapAnycallProxy: EXPIRED"
         );
 
-        address[] memory path = tradeInfo.path;
-        require(path.length >= 2, "SushiSwapTradeProxy: invalid path length");
-        require(path[0] == token, "SushiSwapTradeProxy: source token mismatch");
+        address[] memory path = anycallInfo.path;
+        require(path.length >= 2, "SushiSwapAnycallProxy: invalid path length");
+        require(path[0] == token, "SushiSwapAnycallProxy: source token mismatch");
 
         require(
-            tradeInfo.amountInMax <= amount,
-            "SushiSwapTradeProxy:EXCESSIVE_INPUT_AMOUNT"
+            anycallInfo.amountInMax <= amount,
+            "SushiSwapAnycallProxy:EXCESSIVE_INPUT_AMOUNT"
         );
 
         uint256[] memory amounts;
-        if (tradeInfo.amountOut == 0) {
-            amounts = swapExactTokensForTokens(tradeInfo);
+        if (anycallInfo.amountOut == 0) {
+            amounts = swapExactTokensForTokens(anycallInfo);
         } else {
-            amounts = swapTokensForExactTokens(tradeInfo);
+            amounts = swapTokensForExactTokens(anycallInfo);
         }
 
         TransferHelper.safeTransfer(
@@ -293,10 +280,14 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
             amounts[0]
         );
 
-        if (tradeInfo.toNative) {
+        address recvToken;
+        address receiver;
+        uint256 recvAmount;
+
+        if (anycallInfo.toNative) {
             require(
                 path[path.length - 1] == wNATIVE,
-                "SushiSwapTradeProxy:INVALID_PATH"
+                "SushiSwapAnycallProxy:INVALID_PATH"
             );
             (recvToken, receiver, recvAmount) = _swap(
                 amounts,
@@ -305,16 +296,16 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
             );
             IwNATIVE(wNATIVE).withdraw(recvAmount);
             TransferHelper.safeTransferNATIVE(
-                tradeInfo.receiver,
+                anycallInfo.receiver,
                 recvAmount
             );
             recvToken = address(0);
-            receiver = tradeInfo.receiver;
+            receiver = anycallInfo.receiver;
         } else {
             (recvToken, receiver, recvAmount) = _swap(
                 amounts,
                 path,
-                tradeInfo.receiver
+                anycallInfo.receiver
             );
         }
         emit TokenSwap(recvToken, receiver, recvAmount);
@@ -327,38 +318,40 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
             );
             emit TokenBack(token, receiver, amount.sub(amounts[0]));
         }
+
+        return (true, abi.encode(recvToken, receiver, recvAmount));
     }
 
-    function swapTokensForExactTokens(TradeInfo memory tradeInfo)
+    function swapTokensForExactTokens(AnycallInfo memory anycallInfo)
         internal
         view
         returns (uint256[] memory amounts)
     {
         amounts = UniswapV2Library.getAmountsIn(
             SushiV2Factory,
-            tradeInfo.amountOut,
-            tradeInfo.path
+            anycallInfo.amountOut,
+            anycallInfo.path
         );
         require(
-            amounts[0] <= tradeInfo.amountInMax,
-            "SushiSwapTradeProxy: EXCESSIVE_INPUT_AMOUNT"
+            amounts[0] <= anycallInfo.amountInMax,
+            "SushiSwapAnycallProxy: EXCESSIVE_INPUT_AMOUNT"
         );
     }
 
-    function swapExactTokensForTokens(TradeInfo memory tradeInfo)
+    function swapExactTokensForTokens(AnycallInfo memory anycallInfo)
         internal
         view
         returns (uint256[] memory amounts)
     {
         amounts = UniswapV2Library.getAmountsOut(
             SushiV2Factory,
-            tradeInfo.amountInMax,
-            tradeInfo.path
+            anycallInfo.amountInMax,
+            anycallInfo.path
         );
 
         require(
-            amounts[amounts.length - 1] >= tradeInfo.amountOutMin,
-            "SushiSwapTradeProxy: INSUFFICIENT_OUTPUT_AMOUNT"
+            amounts[amounts.length - 1] >= anycallInfo.amountOutMin,
+            "SushiSwapAnycallProxy: INSUFFICIENT_OUTPUT_AMOUNT"
         );
     }
 
@@ -397,14 +390,14 @@ contract SushiSwapTradeProxyV2 is ITradeProxy, MPCManageable {
     fallback() external payable {
         require(
             msg.value != 0,
-            "MultichainTradeProxy: send value must bigger than zero!"
+            "MultichainAnycallProxy: send value must bigger than zero!"
         );
     }
 
     receive() external payable {
         require(
             msg.value != 0,
-            "MultichainTradeProxy: send value must bigger than zero!"
+            "MultichainAnycallProxy: send value must bigger than zero!"
         );
     }
 }

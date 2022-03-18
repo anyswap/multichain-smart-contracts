@@ -42,19 +42,12 @@ interface IwNATIVE {
     function transfer(address to, uint256 value) external returns (bool);
 }
 
-interface ITradeProxyManager {
-    function trade(
-        address tradeProxy,
+interface IAnycallProxy {
+    function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        );
+    ) external returns (bool success, bytes memory result);
 }
 
 interface IFeeCalc {
@@ -69,10 +62,10 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
 
-    address public tradeProxyManager;
     address public feeCalc;
     address public immutable wNATIVE;
 
+    mapping(address => bool) public supportedAnycallProxy;
     mapping(bytes32 => bool) public swapinExisted;
 
     event LogAnySwapIn(
@@ -106,9 +99,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID,
         uint256 toChainID,
-        address indexed recvToken,
-        address receiver,
-        uint256 recvAmount
+        bool success,
+        bytes result
     );
     event LogAnySwapOutAndCall(
         address indexed token,
@@ -116,27 +108,37 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 fromChainID,
         uint256 toChainID,
-        string tradeProxy,
+        string anycallProxy,
         bytes data
     );
 
     constructor(
-        address _tradeProxyManager,
-        address _feeCalc,
+        address _mpc,
         address _wNATIVE,
-        address _mpc
+        address _feeCalc,
+        address[] memory _anycallProxies
     ) MPCManageable(_mpc) {
-        tradeProxyManager = _tradeProxyManager;
-        feeCalc = _feeCalc;
         wNATIVE = _wNATIVE;
-    }
-
-    function setTradeProxyManager(address _tradeProxyManager) external onlyMPC {
-        tradeProxyManager = _tradeProxyManager;
+        feeCalc = _feeCalc;
+        for(uint256 i = 0; i < _anycallProxies.length; i++) {
+            supportedAnycallProxy[_anycallProxies[i]] = true;
+        }
     }
 
     function setFeeCalc(address _feeCalc) external onlyMPC {
         feeCalc = _feeCalc;
+    }
+
+    function addAnycallProxies(address[] memory proxies) external onlyMPC {
+        for(uint256 i = 0; i < proxies.length; i++) {
+            supportedAnycallProxy[proxies[i]] = true;
+        }
+    }
+
+    function removeAnycallProxies(address[] memory proxies) external onlyMPC {
+        for(uint256 i = 0; i < proxies.length; i++) {
+            supportedAnycallProxy[proxies[i]] = false;
+        }
     }
 
     function changeVault(address token, address newVault)
@@ -215,12 +217,12 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         );
     }
 
-    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call trade proxy with `data`
+    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutAndCall(
         address token,
         uint256 amount,
         uint256 toChainID,
-        string memory tradeProxy,
+        string memory anycallProxy,
         bytes calldata data
     ) external {
         assert(IRouter(token).burn(msg.sender, amount));
@@ -231,7 +233,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             receiveAmount,
             block.chainid,
             toChainID,
-            tradeProxy,
+            anycallProxy,
             data
         );
     }
@@ -280,12 +282,12 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         );
     }
 
-    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call trade proxy with `data`
+    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call anycall proxy with `data`
     function anySwapOutUnderlyingAndCall(
         address token,
         uint256 amount,
         uint256 toChainID,
-        string memory tradeProxy,
+        string memory anycallProxy,
         bytes calldata data
     ) external {
         _anySwapOutUnderlying(token, amount);
@@ -296,7 +298,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             receiveAmount,
             block.chainid,
             toChainID,
-            tradeProxy,
+            anycallProxy,
             data
         );
     }
@@ -347,11 +349,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         );
     }
 
-    // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call trade proxy with `data`
+    // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutNativeAndCall(
         address token,
         uint256 toChainID,
-        string memory tradeProxy,
+        string memory anycallProxy,
         bytes calldata data
     ) external payable {
         _anySwapOutNative(token);
@@ -362,7 +364,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             receiveAmount,
             block.chainid,
             toChainID,
-            tradeProxy,
+            anycallProxy,
             data
         );
     }
@@ -457,22 +459,19 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         address token,
         uint256 amount,
         uint256 fromChainID,
-        address tradeProxy,
+        address anycallProxy,
         bytes calldata data
     ) external nonReentrant onlyMPC {
         require(!swapinExisted[txs], "swapin existed");
+        require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
         swapinExisted[txs] = true;
         require(
-            msg.sender != tradeProxy,
-            "MultichainRouter: forbid call swapin from tradeProxy"
+            msg.sender != anycallProxy,
+            "MultichainRouter: forbid call swapin from anycallProxy"
         );
-        assert(IRouter(token).mint(tradeProxy, amount));
-        (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        ) = ITradeProxyManager(tradeProxyManager).trade(
-                tradeProxy,
+        assert(IRouter(token).mint(anycallProxy, amount));
+        (bool success, bytes memory result)
+            = IAnycallProxy(anycallProxy).exec(
                 token,
                 amount,
                 data
@@ -483,9 +482,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             amount,
             fromChainID,
             block.chainid,
-            recvToken,
-            receiver,
-            recvAmount
+            success,
+            result
         );
     }
 
@@ -495,25 +493,22 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         address token,
         uint256 amount,
         uint256 fromChainID,
-        address tradeProxy,
+        address anycallProxy,
         bytes calldata data
     ) external nonReentrant onlyMPC {
         require(!swapinExisted[txs], "swapin existed");
+        require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
         swapinExisted[txs] = true;
         require(
-            msg.sender != tradeProxy,
-            "MultichainRouter: forbid call swapin from tradeProxy"
+            msg.sender != anycallProxy,
+            "MultichainRouter: forbid call swapin from anycallProxy"
         );
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
         assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, tradeProxy);
-        (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        ) = ITradeProxyManager(tradeProxyManager).trade(
-                tradeProxy,
+        IUnderlying(token).withdraw(amount, anycallProxy);
+        (bool success, bytes memory result)
+            = IAnycallProxy(anycallProxy).exec(
                 _underlying,
                 amount,
                 data
@@ -524,9 +519,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             amount,
             fromChainID,
             block.chainid,
-            recvToken,
-            receiver,
-            recvAmount
+            success,
+            result
         );
     }
 

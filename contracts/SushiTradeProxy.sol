@@ -119,29 +119,23 @@ library SushiswapV2Library {
     }
 }
 
-interface ITradeProxy {
+interface IAnycallProxy {
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        );
+    ) external returns (bool success, bytes memory result);
 }
 
-contract TradeProxy_Sushiswap is MPCManageable, ITradeProxy {
+contract AnycallProxy_Sushiswap is MPCManageable, IAnycallProxy {
     using SafeERC20 for IERC20;
 
     address public immutable factory;
     address public immutable wNATIVE;
 
-    mapping(address => bool) public supportedTradeProxyManager;
+    mapping(address => bool) public supportedCaller;
 
-    struct TradeInfo {
+    struct AnycallInfo {
         uint256 amountOutMin;
         address[] path;
         address receiver;
@@ -153,14 +147,14 @@ contract TradeProxy_Sushiswap is MPCManageable, ITradeProxy {
         address _mpc,
         address _factory,
         address _wNATIVE,
-        address _tradeProxyManager
+        address _caller
     ) MPCManageable(_mpc) {
         factory = _factory;
         wNATIVE = _wNATIVE;
-        supportedTradeProxyManager[_tradeProxyManager] = true;
+        supportedCaller[_caller] = true;
     }
 
-    function encode_trade_info(TradeInfo calldata info)
+    function encode_anycall_info(AnycallInfo calldata info)
         public
         pure
         returns (bytes memory)
@@ -168,64 +162,59 @@ contract TradeProxy_Sushiswap is MPCManageable, ITradeProxy {
         return abi.encode(info);
     }
 
-    function decode_trade_info(bytes memory data)
+    function decode_anycall_info(bytes memory data)
         public
         pure
-        returns (TradeInfo memory)
+        returns (AnycallInfo memory)
     {
-        return abi.decode(data, (TradeInfo));
+        return abi.decode(data, (AnycallInfo));
     }
 
-    function addSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
-        supportedTradeProxyManager[tradeProxyManager] = true;
+    function addSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = true;
     }
 
-    function removeSupportedTradeProxyManager(address tradeProxyManager) external onlyMPC {
-        supportedTradeProxyManager[tradeProxyManager] = false;
+    function removeSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = false;
     }
 
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    )
-        external
-        returns (
-            address recvToken,
-            address receiver,
-            uint256 recvAmount
-        )
-    {
-        require(supportedTradeProxyManager[msg.sender], "TradeProxy: Forbidden");
+    ) external returns (bool success, bytes memory result) {
+        require(supportedCaller[msg.sender], "AnycallProxy: Forbidden");
 
-        TradeInfo memory t = decode_trade_info(data);
-        require(t.deadline >= block.timestamp, "TradeProxy: expired");
+        AnycallInfo memory t = decode_anycall_info(data);
+        require(t.deadline >= block.timestamp, "AnycallProxy: expired");
 
         address[] memory path = t.path;
         uint256 length = path.length;
-        require(length >= 2, "TradeProxy: invalid path length");
-        require(token == path[0], "TradeProxy: source token mismatch");
+        require(length >= 2, "AnycallProxy: invalid path length");
+        require(token == path[0], "AnycallProxy: source token mismatch");
 
         uint256[] memory amounts = SushiswapV2Library.getAmountsOut(factory, amount, path);
         require(amounts.length == length, "path and amounts length mismatch");
-        require(amount == amounts[0], "TradeProxy: source amount mismatch");
-        require(amounts[length - 1] >= t.amountOutMin, "TradeProxy: insufficient output amount");
+        require(amount == amounts[0], "AnycallProxy: source amount mismatch");
+        require(amounts[length - 1] >= t.amountOutMin, "AnycallProxy: insufficient output amount");
 
         // send the initial amount to the first pair
         IERC20(token).safeTransfer(SushiswapV2Library.pairFor(factory, token, path[1]), amount);
 
-        receiver = t.receiver;
-        recvToken = path[length - 1];
-        recvAmount = amounts[length - 1];
+        address receiver = t.receiver;
+        address recvToken = path[length - 1];
+        uint256 recvAmount = amounts[length - 1];
 
         if (t.forNative) {
-            require(recvToken == wNATIVE, "TradeProxy: path is not end of wNATIVE");
+            require(recvToken == wNATIVE, "AnycallProxy: path is not end of wNATIVE");
             _swap(amounts, path, address(this));
             IwNATIVE(wNATIVE).withdraw(recvAmount);
             Address.sendValue(payable(receiver), recvAmount);
         } else {
             _swap(amounts, path, receiver);
         }
+
+        return (true, abi.encode(recvToken, t.receiver, recvAmount));
     }
 
     // requires the initial amount to have already been sent to the first pair
