@@ -68,10 +68,10 @@ async function start() {
         const multichainRouterContract = await loadMultichainRouter(multichainRouter, wallet);
 
         // test between token and token
-        await testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy);
+        // await testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy);
 
         // test between native and token
-        // await testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy);
+        await testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy);
 
         // 11) check all tx res
     }
@@ -152,7 +152,7 @@ async function getSushiswapTradeProxy(wallet, tradeProxyManager, factory, weth) 
 
 // load sushiswapTradeProxy contract instance
 async function loadTradProxy(tradeProxy, wallet) {
-    return eth.loadContract(tradeProxy, ABIS.MultichainTradeProxy.abi, wallet);
+    return eth.loadContract(tradeProxy, ABIS.SushiSwapTradeProxyV2.abi, wallet);
 }
 
 // load sushiFactory contract instance
@@ -287,16 +287,18 @@ async function getBalanceAndLiquidity(wallet, factory, tokenA, tokenB) {
         .then(res => { console.log(`get pair:${res}`); return res })
 
     const tokenAContract = await loadToken(tokenA, wallet);
-    const balances_tokenA = await tokenAContract.balanceOf(pair);
+    const balances_tokenA_pair = await tokenAContract.balanceOf(pair);
+    const balances_tokenA_wallet = await tokenAContract.balanceOf(wallet.address);
 
     const tokenBContract = await loadToken(tokenB, wallet);
-    const balances_tokenB = await tokenBContract.balanceOf(pair);
+    const balances_tokenB_pair = await tokenBContract.balanceOf(pair);
+    const balances_tokenB_wallet = await tokenBContract.balanceOf(wallet.address);
 
     const pairContract = await loadPair(pair, wallet);
-    const balances_liquidity = await pairContract.balanceOf(wallet.address);
+    const balances_liquidity_wallet = await pairContract.balanceOf(wallet.address);
 
     return {
-        balances_tokenA, balances_tokenB, balances_liquidity
+        balances_tokenA_pair,balances_tokenA_wallet, balances_tokenB_pair,balances_tokenB_wallet, balances_liquidity_wallet
     }
 }
 
@@ -309,17 +311,21 @@ async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRout
 
     // get tokenA and tokenB balances of pair and get liquidity balances of wallet before test
     await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
-        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+        console.log(`after init liquidity========balances_tokenA_pair:${res.balances_tokenA_pair}
+        ,balances_tokenA_wallet:${res.balances_tokenA_wallet}
+        ,balances_tokenB_pair:${res.balances_tokenB_pair}
+        ,balances_tokenB_wallet:${res.balances_tokenB_wallet}
+        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)
     });
 
-    // test swapExactTokensForTokens
-    const data = abiCoder.encode(["uint256", "uint256", "uint256", "address[]", "address", "uint256", "bool"],
-        [0, amount, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256, false]);
-
-    // test swapTokensForExactTokens
-    // const data = abiCoder.encode(["uint256", "uint256", "uint256", "address[]", "address", "uint256", "bool"],
-        // [amount / 10, 0, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256, false]);
-
+    const data = abiCoder.encode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"],
+        [[amount/4, 0, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256, false]]);
+    const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
+    console.log(`decodeData:${decodeData}`)
+    const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
+    await tradeProxyContract.decode_trade_info(data).then(
+        res => console.log(`encode:${data} \n decode_trade_info:${res}`)
+    )
     await multichainRouterContract.anySwapInAndExec(
         '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
     ).then(
@@ -328,8 +334,12 @@ async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRout
 
     // get tokenA and tokenB balances of pair and get liquidity balances of wallet after test
     await getBalanceAndLiquidity(wallet, factory, tokenA, tokenB).then(res => {
-        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
-    });
+        console.log(`after exec========balances_tokenA_pair:${res.balances_tokenA_pair}
+        ,balances_tokenA_wallet:${res.balances_tokenA_wallet}
+        ,balances_tokenB_pair:${res.balances_tokenB_pair}
+        ,balances_tokenB_wallet:${res.balances_tokenB_wallet}
+        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)
+        });
 }
 
 async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy) {
@@ -337,19 +347,21 @@ async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRoute
     await addNativeLiquidityByTransfer(wallet, factory, tokenA, weth);
     // get tokenA and weth balances of pair and get liquidity balances of wallet before test
     await getBalanceAndLiquidity(wallet, factory, tokenA, weth).then(res => {
-        console.log(`after init liquidity======== pair tokenA balances:${res.balances_tokenA},pair weth balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
+        console.log(`after init liquidity========balances_tokenA_pair:${res.balances_tokenA_pair}
+        ,balances_tokenA_wallet:${res.balances_tokenA_wallet}
+        ,balances_weth_pair:${res.balances_tokenB_pair}
+        ,balances_weth_wallet:${res.balances_tokenB_wallet}
+        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)
     });
 
-    // test swapTokensForExactETH 
-    const data = interface.encodeFunctionData('swapTokensForExactETH', [
-        amount / 4, amount, [tokenA, weth], wallet.address, eth.constant.MaxUint256
-    ])
-
-    // test swapExactTokensForETH 
-    // const data = interface.encodeFunctionData('swapExactTokensForETH', [
-    // amount, 0, [tokenA, weth], wallet.address, eth.constant.MaxUint256
-    // ])
-
+    const data = abiCoder.encode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"],
+        [[amount/4, 0, amount, [tokenA, weth], wallet.address, eth.constant.MaxUint256, false]]);
+    const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
+    console.log(`decodeData:${decodeData}`)
+    const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
+    await tradeProxyContract.decode_trade_info(data).then(
+        res => console.log(`encode:${data} \n decode_trade_info:${res}`)
+    )
     await multichainRouterContract.anySwapInAndExec(
         '0x77c98d585b510c5aadf26ef775493ce359f0a8c6df644911f3f84b3df59aab8c', tokenA, amount, 0, sushiswapTradeProxy, data
     ).then(
@@ -358,8 +370,12 @@ async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRoute
 
     // get tokenA and weth balances of pair and get liquidity balances of wallet after test
     await getBalanceAndLiquidity(wallet, factory, tokenA, weth).then(res => {
-        console.log(`after exec======== pair tokenA balances:${res.balances_tokenA},pair tokenB balances:${res.balances_tokenB},wallet liquidity balances:${res.balances_liquidity}`)
-    });
+        console.log(`after exec========balances_tokenA_pair:${res.balances_tokenA_pair}
+        ,balances_tokenA_wallet:${res.balances_tokenA_wallet}
+        ,balances_weth_pair:${res.balances_tokenB_pair}
+        ,balances_weth_wallet:${res.balances_tokenB_wallet}
+        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)    });
+
 }
 // start function
 start()
