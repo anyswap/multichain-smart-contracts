@@ -3,7 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./MPCManageable.sol";
+import "../access/MPCManageable.sol";
 
 library SafeMathUniswap {
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {

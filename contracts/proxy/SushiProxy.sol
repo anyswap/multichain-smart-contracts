@@ -3,7 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./MPCManageable.sol";
+import "../access/MPCManageable.sol";
 
 interface ISushiswapV2Pair {
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
