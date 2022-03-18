@@ -22,76 +22,58 @@ async function start() {
 
     /**
      * real test 
-     * 1) deploy TradeProxyManager contract
-     * 2) deploy SushiswapTradeProxy contract
-     * 3) call TradeProxyManage.addTradeProxy()
-     * 4) deploy MultichainRouter contract on src chain
-     * 5) deploy MultichainRouter contract on desc chain
-     * 6) call TradeProxyManage.addAuth()
-     * 7) call MultichainRouter.anySwapOutAndCall() on src chain then return txHash
-     * 8) verify txHash on src chain
-     * 9) add mint authority to MultichainRouter
-     * 10) call MultichainRouter.anySwapInAndExec() on desc chain
-     * 11) check all tx res
+     * 1) deploy SushiswapTradeProxy contract
+     * 2) deploy MultichainRouter contract on src chain
+     * 3) deploy MultichainRouter contract on desc chain
+     * 4) call MultichainRouter.anySwapOutAndCall() on src chain then return txHash
+     * 5) verify txHash on src chain
+     * 6) add mint authority to MultichainRouter
+     * 7) call MultichainRouter.anySwapInAndExec() on desc chain
+     * 8) check all tx res
      */
     {
-        // 1) deploy TradeProxyManager contract
-        const tradeProxyManager = await getTradeProxyManager(wallet);
-        // 2) deploy SushiswapTradeProxy contract
-        const sushiswapTradeProxy = await getSushiswapTradeProxy(wallet, tradeProxyManager, factory, weth);
-        // 3) call TradeProxyManage.addTradeProxy()
-        const tradeProxyManagerContract = await loadTradeProxyManager(tradeProxyManager, wallet);
-        await tradeProxyManagerContract.addTradeProxy(sushiswapTradeProxy)
-            .then(res => console.log(`add tradeProxy :${res.hash}`))
+        // 1) deploy SushiswapTradeProxy contract
+        const sushiswapTradeProxy = await getSushiswapTradeProxy(wallet, factory, weth);
 
-        // 4) deploy MultichainRouter contract on src chain
+        // 2) deploy MultichainRouter contract on src chain
         // do after
 
-        // 5) deploy MultichainRouter contract on desc chain
-        const multichainRouter = await getMultichainRouter(wallet, tradeProxyManager);
-        // 6) call TradeProxyManage.addAuth()
-        await tradeProxyManagerContract.addAuth(multichainRouter).then(
-            res => console.log(`add Auth:${res.hash}`)
+        // 3) deploy MultichainRouter contract on desc chain
+        const multichainRouter = await getMultichainRouter(wallet, sushiswapTradeProxy);
+        const sushiswapTradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
+        await sushiswapTradeProxyContract.addSupportedCaller(multichainRouter).then(
+            res => console.log(`addSupportedCaller:${res.hash}`)
         )
-        // 7) call MultichainRouter.anySwapOutAndCall() on src chain then return txHash
+        // 4) call MultichainRouter.anySwapOutAndCall() on src chain then return txHash
         // do after
 
-        // 8) verify txHash on src chain
+        // 5) verify txHash on src chain
         // do after
 
-        // 9) add mint authority to MultichainRouter
+        // 6) add mint authority to MultichainRouter
         const tokenAContract = await loadToken(tokenA, wallet);
         await tokenAContract.addMinterNow(multichainRouter).then(
             res => console.log(`tokenAContract addMinterNow: ${res.hash}`)
         );
-        // 10) call MultichainRouter.anySwapInAndExec() on desc chain
+        // 7) call MultichainRouter.anySwapInAndExec() on desc chain
         const multichainRouterContract = await loadMultichainRouter(multichainRouter, wallet);
 
         // test between token and token
-        // await testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy);
+        await testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRouterContract, sushiswapTradeProxy);
 
         // test between native and token
-        await testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy);
+        // await testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy);
 
-        // 11) check all tx res
+        // 8) check all tx res
+        // do after
     }
 };
 
 // deploy multichainRouter and return address
-async function getMultichainRouter(wallet, tradeProxyManager) {
-    // address _tradeProxyManager, address _feeCalc, address _wNATIVE, address _mpc
+async function getMultichainRouter(wallet, sushiswapTradeProxy) {
     const MultichainRouter_factory = eth.deployContract(ABIS.MultichainRouter.abi, ABIS.MultichainRouter.data.bytecode, wallet);
-    return await MultichainRouter_factory.deploy(tradeProxyManager, eth.constant.AddressZero, eth.constant.AddressZero, wallet.address).then(res => {
+    return await MultichainRouter_factory.deploy(wallet.address, eth.constant.AddressZero, eth.constant.AddressZero, [sushiswapTradeProxy]).then(res => {
         console.log(`MultichainRouter address:${res.address}`);
-        return res.address;
-    });
-}
-
-// deploy tradeProxyManager and return address
-async function getTradeProxyManager(wallet) {
-    const TradeProxyManager_factory = eth.deployContract(ABIS.TradeProxyManager.abi, ABIS.TradeProxyManager.data.bytecode, wallet);
-    return await TradeProxyManager_factory.deploy(wallet.address).then(res => {
-        console.log(`TradeProxyManager address:${res.address}`);
         return res.address;
     });
 }
@@ -142,9 +124,9 @@ async function getSushiRouter(wallet, factory) {
 }
 
 // deploy sushiswapTradeProxy and return address
-async function getSushiswapTradeProxy(wallet, tradeProxyManager, factory, weth) {
+async function getSushiswapTradeProxy(wallet, factory, weth) {
     const SushiswapTradeProxy_factory = eth.deployContract(ABIS.SushiSwapTradeProxyV2.abi, ABIS.SushiSwapTradeProxyV2.data.bytecode, wallet)
-    return await SushiswapTradeProxy_factory.deploy(tradeProxyManager, factory, weth).then(res => {
+    return await SushiswapTradeProxy_factory.deploy(wallet.address, factory, weth).then(res => {
         console.log(`SushiswapTradeProxy address:${res.address}`);
         return res.address;
     });
@@ -178,11 +160,6 @@ async function loadToken(token, wallet) {
 // load weth contract instance
 async function loadWeth(weth, wallet) {
     return eth.loadContract(weth, ABIS.WETH9.abi, wallet);
-}
-
-// load tradeProxyManager contract instance
-async function loadTradeProxyManager(tradeProxyManager, wallet) {
-    return eth.loadContract(tradeProxyManager, ABIS.TradeProxyManager.abi, wallet);
 }
 
 // load multichainRouter contract instance
@@ -298,7 +275,7 @@ async function getBalanceAndLiquidity(wallet, factory, tokenA, tokenB) {
     const balances_liquidity_wallet = await pairContract.balanceOf(wallet.address);
 
     return {
-        balances_tokenA_pair,balances_tokenA_wallet, balances_tokenB_pair,balances_tokenB_wallet, balances_liquidity_wallet
+        balances_tokenA_pair, balances_tokenA_wallet, balances_tokenB_pair, balances_tokenB_wallet, balances_liquidity_wallet
     }
 }
 
@@ -319,9 +296,8 @@ async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRout
     });
 
     const data = abiCoder.encode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"],
-        [[amount/4, 0, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256, false]]);
-    const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
-    console.log(`decodeData:${decodeData}`)
+        [[0, 0, amount, [tokenA, tokenB], wallet.address, eth.constant.MaxUint256, false]]);
+
     const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
     await tradeProxyContract.decode_anycall_info(data).then(
         res => console.log(`encode:${data} \n decode_anycall_info:${res}`)
@@ -339,7 +315,7 @@ async function testTokenAndToken(wallet, tokenA, tokenB, factory, multichainRout
         ,balances_tokenB_pair:${res.balances_tokenB_pair}
         ,balances_tokenB_wallet:${res.balances_tokenB_wallet}
         ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)
-        });
+    });
 }
 
 async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRouterContract, sushiswapTradeProxy) {
@@ -355,7 +331,7 @@ async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRoute
     });
 
     const data = abiCoder.encode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"],
-        [[amount/4, 0, amount, [tokenA, weth], wallet.address, eth.constant.MaxUint256, false]]);
+        [[amount / 4, 0, amount, [tokenA, weth], wallet.address, eth.constant.MaxUint256, false]]);
     const decodeData = abiCoder.decode(["tuple(uint256,uint256,uint256,address[],address,uint256,bool)"], data);
     console.log(`decodeData:${decodeData}`)
     const tradeProxyContract = await loadTradProxy(sushiswapTradeProxy, wallet);
@@ -374,7 +350,8 @@ async function testTokenAndNative(wallet, tokenA, weth, factory, multichainRoute
         ,balances_tokenA_wallet:${res.balances_tokenA_wallet}
         ,balances_weth_pair:${res.balances_tokenB_pair}
         ,balances_weth_wallet:${res.balances_tokenB_wallet}
-        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)    });
+        ,balances_liquidity_wallet:${res.balances_liquidity_wallet}`)
+    });
 
 }
 // start function

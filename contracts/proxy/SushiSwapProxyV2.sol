@@ -199,6 +199,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
 
     address public immutable SushiV2Factory; // 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac
     address public immutable wNATIVE; // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+    mapping(address => bool) public supportedCaller;
 
     event TokenSwap(
         address indexed token,
@@ -211,11 +212,17 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         uint256 amount
     );
 
+    modifier onlyAuth() {
+        require(supportedCaller[msg.sender], "SushiSwapAnycallProxy: only auth");
+        _;
+    }
+
     constructor(
         address mpc_,
         address sushiV2Factory_,
         address wNATIVE_
     ) MPCManageable(mpc_) {
+        supportedCaller[mpc_]=true;
         SushiV2Factory = sushiV2Factory_;
         wNATIVE = wNATIVE_;
     }
@@ -252,27 +259,19 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         return abi.decode(data, (AnycallInfo));
     }
 
-    function encode_anycall_res(AnycallRes memory res)
-        public
-        pure
-        returns (bytes memory)
-    {
-        return abi.encode(res);
+    function addSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = true;
     }
 
-    function decode_anycall_res(bytes memory data)
-        public
-        pure
-        returns (AnycallRes memory)
-    {
-        return abi.decode(data, (AnycallRes));
+    function removeSupportedCaller(address caller) external onlyMPC {
+        supportedCaller[caller] = false;
     }
 
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool success, bytes memory result) {
+    ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
         require(
             anycallInfo.deadline >= block.timestamp,
@@ -342,7 +341,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
 
         return (
             true,
-            encode_anycall_res(AnycallRes(recvToken, receiver, recvAmount))
+            abi.encode(recvToken, receiver, recvAmount)
         );
     }
 

@@ -1,4 +1,3 @@
-const TradeProxyManager = require('../abis/TradeProxyManager.json')
 const MultichainRouter = require('../abis/MultichainRouter.json')
 const SushiswapTradeProxy = require('../abis/SushiswapTradeProxy.json')
 const SushiSwapTradeProxyV2 = require('../abis/SushiSwapTradeProxyV2.json')
@@ -9,7 +8,6 @@ const UniswapV2Router02 = require('../abis/UniswapV2Router02.json')
 const WETH9 = require('../abis/WETH9.json')
 
 const ABIS = {
-    TradeProxyManager,
     MultichainRouter,
     SushiswapTradeProxy,
     SushiSwapTradeProxyV2,
