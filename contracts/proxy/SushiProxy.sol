@@ -122,6 +122,7 @@ library SushiswapV2Library {
 interface IAnycallProxy {
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result);
@@ -138,7 +139,6 @@ contract AnycallProxy_Sushiswap is MPCManageable, IAnycallProxy {
     struct AnycallInfo {
         uint256 amountOutMin;
         address[] path;
-        address receiver;
         uint256 deadline;
         bool forNative;
     }
@@ -180,6 +180,7 @@ contract AnycallProxy_Sushiswap is MPCManageable, IAnycallProxy {
 
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result) {
@@ -201,7 +202,6 @@ contract AnycallProxy_Sushiswap is MPCManageable, IAnycallProxy {
         // send the initial amount to the first pair
         IERC20(token).safeTransfer(SushiswapV2Library.pairFor(factory, token, path[1]), amount);
 
-        address receiver = t.receiver;
         address recvToken = path[length - 1];
         uint256 recvAmount = amounts[length - 1];
 
@@ -214,7 +214,7 @@ contract AnycallProxy_Sushiswap is MPCManageable, IAnycallProxy {
             _swap(amounts, path, receiver);
         }
 
-        return (true, abi.encode(recvToken, t.receiver, recvAmount));
+        return (true, abi.encode(recvToken, recvAmount));
     }
 
     // requires the initial amount to have already been sent to the first pair

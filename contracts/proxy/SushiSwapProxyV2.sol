@@ -189,6 +189,7 @@ library TransferHelper {
 interface IAnycallProxy {
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result);
@@ -232,7 +233,6 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         uint256 amountOutMin;
         uint256 amountInMax;
         address[] path;
-        address receiver;
         uint256 deadline;
         bool toNative;
     }
@@ -269,6 +269,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
 
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
@@ -304,7 +305,6 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         );
 
         address recvToken;
-        address receiver;
         uint256 recvAmount;
 
         if (anycallInfo.toNative) {
@@ -312,20 +312,19 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
                 path[path.length - 1] == wNATIVE,
                 "SushiSwapAnycallProxy:INVALID_PATH"
             );
-            (recvToken, receiver, recvAmount) = _swap(
+            (recvToken, recvAmount) = _swap(
                 amounts,
                 path,
                 address(this)
             );
             IwNATIVE(wNATIVE).withdraw(recvAmount);
-            TransferHelper.safeTransferNATIVE(anycallInfo.receiver, recvAmount);
+            TransferHelper.safeTransferNATIVE(receiver, recvAmount);
             recvToken = address(0);
-            receiver = anycallInfo.receiver;
         } else {
-            (recvToken, receiver, recvAmount) = _swap(
+            (recvToken, recvAmount) = _swap(
                 amounts,
                 path,
-                anycallInfo.receiver
+                receiver
             );
         }
         emit TokenSwap(recvToken, receiver, recvAmount);
@@ -341,7 +340,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
 
         return (
             true,
-            abi.encode(recvToken, receiver, recvAmount)
+            abi.encode(recvToken, recvAmount)
         );
     }
 
@@ -389,7 +388,6 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
         virtual
         returns (
             address,
-            address,
             uint256
         )
     {
@@ -407,7 +405,7 @@ contract SushiSwapAnycallProxyV2 is IAnycallProxy, MPCManageable {
                 UniswapV2Library.pairFor(SushiV2Factory, input, output)
             ).swap(amount0Out, amount1Out, to, new bytes(0));
         }
-        return (path[path.length - 1], _to, amounts[amounts.length - 1]);
+        return (path[path.length - 1], amounts[amounts.length - 1]);
     }
 
     fallback() external payable {

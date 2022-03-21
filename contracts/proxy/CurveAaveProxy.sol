@@ -8,6 +8,7 @@ import "../access/MPCManageable.sol";
 interface IAnycallProxy {
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result);
@@ -29,7 +30,6 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
 
     struct AnycallInfo {
         address pool;
-        address receiver;
         bool is_exchange_underlying;
         uint256 deadline;
         int128 i;
@@ -86,6 +86,7 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
 
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result) {
@@ -119,8 +120,8 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
             recvAmount = pool.exchange(t.i, t.j, amount, t.min_dy);
         }
 
-        IERC20(recvToken).safeTransfer(t.receiver, recvAmount);
+        IERC20(recvToken).safeTransfer(receiver, recvAmount);
 
-        return (true, abi.encode(recvToken, t.receiver, recvAmount));
+        return (true, abi.encode(recvToken, recvAmount));
     }
 }

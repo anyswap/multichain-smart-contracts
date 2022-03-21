@@ -45,6 +45,7 @@ interface IwNATIVE {
 interface IAnycallProxy {
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result);
@@ -96,6 +97,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     event LogAnySwapInAndExec(
         bytes32 indexed txhash,
         address indexed token,
+        address indexed receiver,
         uint256 amount,
         uint256 fromChainID,
         uint256 toChainID,
@@ -105,6 +107,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     event LogAnySwapOutAndCall(
         address indexed token,
         address indexed from,
+        string to,
         uint256 amount,
         uint256 fromChainID,
         uint256 toChainID,
@@ -220,6 +223,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutAndCall(
         address token,
+        string memory to,
         uint256 amount,
         uint256 toChainID,
         string memory anycallProxy,
@@ -230,6 +234,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
+            to,
             receiveAmount,
             block.chainid,
             toChainID,
@@ -285,6 +290,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call anycall proxy with `data`
     function anySwapOutUnderlyingAndCall(
         address token,
+        string memory to,
         uint256 amount,
         uint256 toChainID,
         string memory anycallProxy,
@@ -295,6 +301,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
+            to,
             receiveAmount,
             block.chainid,
             toChainID,
@@ -352,6 +359,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutNativeAndCall(
         address token,
+        string memory to,
         uint256 toChainID,
         string memory anycallProxy,
         bytes calldata data
@@ -361,6 +369,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
+            to,
             receiveAmount,
             block.chainid,
             toChainID,
@@ -453,10 +462,28 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         emit LogAnySwapIn(txs, token, to, amount, fromChainID, block.chainid);
     }
 
+    function atomicSwapInAndExec(
+        address token,
+        address receiver,
+        uint256 amount,
+        address anycallProxy,
+        bytes calldata data,
+        bool useUnderlying
+    ) external returns (bool success, bytes memory result) {
+        require(msg.sender == address(this), "forbid atomic call");
+        if (useUnderlying) {
+            IUnderlying(token).withdraw(amount, anycallProxy);
+            return IAnycallProxy(anycallProxy).exec(IUnderlying(token).underlying(), receiver, amount, data);
+        }
+        assert(IRouter(token).mint(anycallProxy, amount));
+        return IAnycallProxy(anycallProxy).exec(token, receiver, amount, data);
+    }
+
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(
         bytes32 txs,
         address token,
+        address receiver,
         uint256 amount,
         uint256 fromChainID,
         address anycallProxy,
@@ -469,16 +496,20 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             msg.sender != anycallProxy,
             "MultichainRouter: forbid call swapin from anycallProxy"
         );
-        assert(IRouter(token).mint(anycallProxy, amount));
-        (bool success, bytes memory result)
-            = IAnycallProxy(anycallProxy).exec(
-                token,
-                amount,
-                data
-            );
+
+        bool success;
+        bytes memory result;
+        try this.atomicSwapInAndExec(token, receiver, amount, anycallProxy, data, false)
+        returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch {
+            assert(IRouter(token).mint(receiver, amount));
+        }
+
         emit LogAnySwapInAndExec(
             txs,
             token,
+            receiver,
             amount,
             fromChainID,
             block.chainid,
@@ -491,6 +522,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     function anySwapInUnderlyingAndExec(
         bytes32 txs,
         address token,
+        address receiver,
         uint256 amount,
         uint256 fromChainID,
         address anycallProxy,
@@ -506,16 +538,20 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
         assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, anycallProxy);
-        (bool success, bytes memory result)
-            = IAnycallProxy(anycallProxy).exec(
-                _underlying,
-                amount,
-                data
-            );
+
+        bool success;
+        bytes memory result;
+        try this.atomicSwapInAndExec(token, receiver, amount, anycallProxy, data, true)
+        returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch {
+            IUnderlying(token).withdraw(amount, receiver);
+        }
+
         emit LogAnySwapInAndExec(
             txs,
             token,
+            receiver,
             amount,
             fromChainID,
             block.chainid,
