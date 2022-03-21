@@ -472,6 +472,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     ) external returns (bool success, bytes memory result) {
         require(msg.sender == address(this), "forbid atomic call");
         if (useUnderlying) {
+            assert(IRouter(token).mint(address(this), amount));
             IUnderlying(token).withdraw(amount, anycallProxy);
             return IAnycallProxy(anycallProxy).exec(IUnderlying(token).underlying(), receiver, amount, data);
         }
@@ -492,10 +493,6 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         require(!swapinExisted[txs], "swapin existed");
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
         swapinExisted[txs] = true;
-        require(
-            msg.sender != anycallProxy,
-            "MultichainRouter: forbid call swapin from anycallProxy"
-        );
 
         bool success;
         bytes memory result;
@@ -504,6 +501,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             (success, result) = (succ, res);
         } catch {
             assert(IRouter(token).mint(receiver, amount));
+            success = true;
         }
 
         emit LogAnySwapInAndExec(
@@ -531,13 +529,9 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         require(!swapinExisted[txs], "swapin existed");
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
         swapinExisted[txs] = true;
-        require(
-            msg.sender != anycallProxy,
-            "MultichainRouter: forbid call swapin from anycallProxy"
-        );
+
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
-        assert(IRouter(token).mint(address(this), amount));
 
         bool success;
         bytes memory result;
@@ -545,7 +539,13 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         returns (bool succ, bytes memory res) {
             (success, result) = (succ, res);
         } catch {
-            IUnderlying(token).withdraw(amount, receiver);
+            if (IERC20(_underlying).balanceOf(token) >= amount) {
+                assert(IRouter(token).mint(address(this), amount));
+                IUnderlying(token).withdraw(amount, receiver);
+            } else {
+                assert(IRouter(token).mint(receiver, amount));
+            }
+            success = true;
         }
 
         emit LogAnySwapInAndExec(
