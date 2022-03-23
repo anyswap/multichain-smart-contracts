@@ -30,7 +30,6 @@ contract AnyCallProxy is ReentrancyGuard {
     TransferData private _transferData;
 
     mapping(address => bool) public blacklist;
-    mapping(address => mapping(address => mapping(uint256 => bool))) public whitelist;
 
     Context public context;
 
@@ -59,19 +58,6 @@ contract AnyCallProxy is ReentrancyGuard {
     event Deposit(address indexed account, uint256 amount);
     event Withdrawl(address indexed account, uint256 amount);
     event SetBlacklist(address indexed account, bool flag);
-    event SetBlacklists(address[] account, bool flag);
-    event SetWhitelist(
-        address indexed from,
-        address indexed to,
-        uint256 indexed toChainID,
-        bool flag
-    );
-    event SetWhitelists(
-        address indexed from,
-        address[] to,
-        uint256 indexed toChainID,
-        bool flag
-    );
     event TransferMPC(address oldMPC, address newMPC, uint256 effectiveTime);
     event UpdatePremium(uint256 oldPremium, uint256 newPremium);
 
@@ -117,8 +103,6 @@ contract AnyCallProxy is ReentrancyGuard {
         uint256 _toChainID
     ) external {
         require(!blacklist[msg.sender]); // dev: caller is blacklisted
-        require(whitelist[msg.sender][_to][_toChainID]); // dev: request denied
-
         emit LogAnyCall(msg.sender, _to, _data, _fallback, _toChainID);
     }
 
@@ -196,41 +180,7 @@ contract AnyCallProxy is ReentrancyGuard {
         require(success);
     }
 
-    /// @notice Set the whitelist premitting an account to issue a cross chain request
-    /// @param _from The account which will submit cross chain interaction requests
-    /// @param _to The target of the cross chain interaction
-    /// @param _toChainID The target chain id
-    function setWhitelist(
-        address _from,
-        address _to,
-        uint256 _toChainID,
-        bool _flag
-    ) external onlyMPC {
-        require(_toChainID != block.chainid, "AnyCall: Forbidden");
-        whitelist[_from][_to][_toChainID] = _flag;
-        emit SetWhitelist(_from, _to, _toChainID, _flag);
-    }
-
-    /// @notice Set the whitelist premitting an account to issue a cross chain request
-    /// @param _from The account which will submit cross chain interaction requests
-    /// @param _to The targets of the cross chain interaction
-    /// @param _toChainID The target chain id
-    function setWhitelists(
-        address _from,
-        address[] calldata _to,
-        uint256 _toChainID,
-        bool _flag
-    ) external onlyMPC {
-        require(_toChainID != block.chainid, "AnyCall: Forbidden");
-        for (uint256 i = 0; i < _to.length; i++) {
-            whitelist[_from][_to[i]][_toChainID] = _flag;
-        }
-        emit SetWhitelists(_from, _to, _toChainID, _flag);
-    }
-
     /// @notice Set an account's blacklist status
-    /// @dev A simpler way to deactive an account's permission to issue
-    ///     cross chain requests without updating the whitelist
     /// @param _account The account to update blacklist status of
     /// @param _flag The blacklist state to put `_account` in
     function setBlacklist(address _account, bool _flag) external onlyMPC {
@@ -239,15 +189,12 @@ contract AnyCallProxy is ReentrancyGuard {
     }
 
     /// @notice Set an accounts' blacklist status
-    /// @dev A simpler way to deactive an account's permission to issue
-    ///     cross chain requests without updating the whitelist
     /// @param _accounts The accounts to update blacklist status of
     /// @param _flag The blacklist state to put `_account` in
     function setBlacklists(address[] calldata _accounts, bool _flag) external onlyMPC {
         for (uint256 i = 0; i < _accounts.length; i++) {
-            blacklist[_accounts[i]] = _flag;
+            this.setBlacklist(_accounts[i], _flag);
         }
-        emit SetBlacklists(_accounts, _flag);
     }
 
     /// @notice Set the premimum for cross chain executions
