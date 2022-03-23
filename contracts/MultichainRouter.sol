@@ -128,6 +128,10 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         }
     }
 
+    receive() external payable {
+        assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
+    }
+
     function setFeeCalc(address _feeCalc) external onlyMPC {
         feeCalc = _feeCalc;
     }
