@@ -106,14 +106,6 @@ contract AnyCallProxy is ReentrancyGuard {
         emit LogAnyCall(msg.sender, _to, _data, _fallback, _toChainID);
     }
 
-    function revertableCall(
-        address _to,
-        bytes calldata _data
-    ) external returns (bool success, bytes memory result) {
-        require(msg.sender == address(this)); // only allow call from this contract
-        return _to.call(_data);
-    }
-
     /**
         @notice Execute a cross chain interaction
         @dev Only callable by the MPC
@@ -131,13 +123,7 @@ contract AnyCallProxy is ReentrancyGuard {
         uint256 _fromChainID
     ) external nonReentrant charge(_from) onlyMPC {
         context = Context({sender: _from, fromChainID: _fromChainID});
-        bool success;
-        bytes memory result;
-        try this.revertableCall(_to, _data) returns (bool succ, bytes memory res) {
-            (success, result) = (succ, res);
-        } catch {
-            success = false;
-        }
+        (bool success, bytes memory result) = _to.call(_data);
         context = Context({sender: address(0), fromChainID: 0});
 
         emit LogAnyExec(_from, _to, _data, success, result, _fallback, _fromChainID);
