@@ -27,9 +27,9 @@ contract AnyCallProxy is ReentrancyGuard {
     uint256 constant EXECUTION_OVERHEAD = 100000;
 
     address public mpc;
-    TransferData private _transferData;
 
     mapping(address => bool) public blacklist;
+    mapping(address => mapping(address => mapping(uint256 => bool))) public whitelist;
 
     Context public context;
 
@@ -58,13 +58,18 @@ contract AnyCallProxy is ReentrancyGuard {
     event Deposit(address indexed account, uint256 amount);
     event Withdrawl(address indexed account, uint256 amount);
     event SetBlacklist(address indexed account, bool flag);
+    event SetWhitelist(
+        address indexed from,
+        address indexed to,
+        uint256 indexed toChainID,
+        bool flag
+    );
     event TransferMPC(address oldMPC, address newMPC, uint256 effectiveTime);
     event UpdatePremium(uint256 oldPremium, uint256 newPremium);
 
     constructor(address _mpc, uint128 _premium) {
         mpc = _mpc;
         _feeData.premium = _premium;
-        _transferData = TransferData(uint96(block.timestamp), _mpc);
 
         emit TransferMPC(address(0), _mpc, block.timestamp);
         emit UpdatePremium(0, _premium);
@@ -103,6 +108,8 @@ contract AnyCallProxy is ReentrancyGuard {
         uint256 _toChainID
     ) external {
         require(!blacklist[msg.sender]); // dev: caller is blacklisted
+        require(whitelist[msg.sender][_to][_toChainID]); // dev: request denied
+
         emit LogAnyCall(msg.sender, _to, _data, _fallback, _toChainID);
     }
 
@@ -166,7 +173,40 @@ contract AnyCallProxy is ReentrancyGuard {
         require(success);
     }
 
+    /// @notice Set the whitelist premitting an account to issue a cross chain request
+    /// @param _from The account which will submit cross chain interaction requests
+    /// @param _to The target of the cross chain interaction
+    /// @param _toChainID The target chain id
+    function setWhitelist(
+        address _from,
+        address _to,
+        uint256 _toChainID,
+        bool _flag
+    ) external onlyMPC {
+        whitelist[_from][_to][_toChainID] = _flag;
+        emit SetWhitelist(_from, _to, _toChainID, _flag);
+    }
+
+    /// @notice Set the whitelist premitting an account to issue a cross chain request
+    /// @param _from The account which will submit cross chain interaction requests
+    /// @param _tos The targets of the cross chain interaction
+    /// @param _toChainIDs The target chain ids
+    function setWhitelists(
+        address _from,
+        address[] calldata _tos,
+        uint256[] calldata _toChainIDs,
+        bool _flag
+    ) external onlyMPC {
+        require(_tos.length == _toChainIDs.length);
+        for (uint256 i = 0; i < _tos.length; i++) {
+            whitelist[_from][_tos[i]][_toChainIDs[i]] = _flag;
+            emit SetWhitelist(_from, _tos[i], _toChainIDs[i], _flag);
+        }
+    }
+
     /// @notice Set an account's blacklist status
+    /// @dev A simpler way to deactive an account's permission to issue
+    ///     cross chain requests without updating the whitelist
     /// @param _account The account to update blacklist status of
     /// @param _flag The blacklist state to put `_account` in
     function setBlacklist(address _account, bool _flag) external onlyMPC {
@@ -175,11 +215,14 @@ contract AnyCallProxy is ReentrancyGuard {
     }
 
     /// @notice Set an accounts' blacklist status
+    /// @dev A simpler way to deactive an account's permission to issue
+    ///     cross chain requests without updating the whitelist
     /// @param _accounts The accounts to update blacklist status of
     /// @param _flag The blacklist state to put `_account` in
     function setBlacklists(address[] calldata _accounts, bool _flag) external onlyMPC {
         for (uint256 i = 0; i < _accounts.length; i++) {
-            this.setBlacklist(_accounts[i], _flag);
+            blacklist[_accounts[i]] = _flag;
+            emit SetBlacklist(_accounts[i], _flag);
         }
     }
 
@@ -199,7 +242,6 @@ contract AnyCallProxy is ReentrancyGuard {
     /// @notice Initiate a transfer of MPC status
     /// @param _newMPC The address of the new MPC
     function changeMPC(address _newMPC) external onlyMPC {
-        _transferData = TransferData(uint96(block.timestamp), _newMPC);
         emit TransferMPC(mpc, _newMPC, block.timestamp);
         mpc = _newMPC;
     }
@@ -215,15 +257,5 @@ contract AnyCallProxy is ReentrancyGuard {
     ///     to the miner it is given to the MPC executing cross chain requests
     function premium() external view returns(uint128) {
         return _feeData.premium;
-    }
-
-    /// @notice Get the effective time at which pendingMPC may become MPC
-    function effectiveTime() external view returns(uint256) {
-        return _transferData.effectiveTime;
-    }
-
-    /// @notice Get the address of the pending MPC
-    function pendingMPC() external view returns(address) {
-        return _transferData.pendingMPC;
     }
 }
