@@ -60,7 +60,7 @@ contract RouterSwapConfig is IRouterSwapConfig, Ownable {
         _;
     }
 
-    mapping(address => SwapConfig) public _swapConfig;
+    mapping(address => SwapConfig) _swapConfig;
     mapping(address => mapping(address => bool)) _isInBigValueWhitelist;
 
     constructor(address[2] memory _owners) Ownable(_owners) {
