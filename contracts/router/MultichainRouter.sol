@@ -10,6 +10,9 @@ interface IRouter {
     function mint(address to, uint256 amount) external returns (bool);
 
     function burn(address from, uint256 amount) external returns (bool);
+
+    function withdrawVault(address from, uint amount, address to) external returns (uint);
+
 }
 
 interface IUnderlying {
@@ -51,19 +54,10 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
-interface IFeeCalc {
-    function calcFee(
-        address token,
-        address sender,
-        uint256 amount
-    ) external returns (uint256 fee);
-}
-
 contract MultichainRouter is MPCManageable, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
 
-    address public feeCalc;
     address public immutable wNATIVE;
 
     mapping(address => bool) public supportedAnycallProxy;
@@ -118,11 +112,9 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     constructor(
         address _mpc,
         address _wNATIVE,
-        address _feeCalc,
         address[] memory _anycallProxies
     ) MPCManageable(_mpc) {
         wNATIVE = _wNATIVE;
-        feeCalc = _feeCalc;
         for(uint256 i = 0; i < _anycallProxies.length; i++) {
             supportedAnycallProxy[_anycallProxies[i]] = true;
         }
@@ -130,10 +122,6 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
 
     receive() external payable {
         assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
-    }
-
-    function setFeeCalc(address _feeCalc) external onlyMPC {
-        feeCalc = _feeCalc;
     }
 
     function addAnycallProxies(address[] memory proxies) external onlyMPC {
@@ -176,16 +164,6 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         return IAnyswapERC20Auth(token).revokeMinter(minter);
     }
 
-    function _calcRecvAmount(
-        address token,
-        address sender,
-        uint256 amount
-    ) internal returns (uint256) {
-        uint256 fee = IFeeCalc(feeCalc).calcFee(token, sender, amount);
-        require(amount >= fee, "MultichainRouter: not enough token fee");
-        return amount - fee;
-    }
-
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to`
     function anySwapOut(
         address token,
@@ -194,12 +172,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external {
         assert(IRouter(token).burn(msg.sender, amount));
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID
         );
@@ -213,12 +190,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external {
         assert(IRouter(token).burn(msg.sender, amount));
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID
         );
@@ -234,12 +210,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         bytes calldata data
     ) external {
         assert(IRouter(token).burn(msg.sender, amount));
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID,
             anycallProxy,
@@ -261,12 +236,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external {
         _anySwapOutUnderlying(token, amount);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID
         );
@@ -280,12 +254,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external {
         _anySwapOutUnderlying(token, amount);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID
         );
@@ -301,12 +274,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         bytes calldata data
     ) external {
         _anySwapOutUnderlying(token, amount);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, amount);
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            amount,
             block.chainid,
             toChainID,
             anycallProxy,
@@ -331,12 +303,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external payable {
         _anySwapOutNative(token);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, msg.value);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            msg.value,
             block.chainid,
             toChainID
         );
@@ -349,12 +320,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 toChainID
     ) external payable {
         _anySwapOutNative(token);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, msg.value);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            msg.value,
             block.chainid,
             toChainID
         );
@@ -369,12 +339,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         bytes calldata data
     ) external payable {
         _anySwapOutNative(token);
-        uint256 receiveAmount = _calcRecvAmount(token, msg.sender, msg.value);
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
             to,
-            receiveAmount,
+            msg.value,
             block.chainid,
             toChainID,
             anycallProxy,
@@ -602,5 +571,11 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         IwNATIVE(wNATIVE).withdraw(amount);
         Address.sendValue(payable(to), amount);
         return amount;
+    }
+
+    // extracts mpc fee from bridge fees
+    function anySwapFeeTo(address token, uint amount) external onlyMPC {
+        IRouter(token).mint(msg.sender, amount);
+        IRouter(token).withdrawVault(msg.sender, amount, msg.sender);
     }
 }
