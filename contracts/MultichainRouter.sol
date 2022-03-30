@@ -149,7 +149,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     function changeVault(address token, address newVault)
-        public
+        external
         onlyMPC
         returns (bool)
     {
@@ -581,7 +581,7 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         return msg.value;
     }
 
-    // Withdraw `amount` `Native` from `token` address to `to`
+    // Withdraw `amount` `Native` from `token` address to `to` (need approve)
     function withdrawNative(
         address token,
         uint256 amount,
@@ -592,7 +592,13 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
             IUnderlying(token).underlying() == wNATIVE,
             "MultichainRouter: underlying is not wNATIVE"
         );
+
+        uint256 old_balance = IERC20(wNATIVE).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         IUnderlying(token).withdraw(amount, address(this));
+        uint256 new_balance = IERC20(wNATIVE).balanceOf(address(this));
+        assert(new_balance == old_balance + amount);
+
         IwNATIVE(wNATIVE).withdraw(amount);
         Address.sendValue(payable(to), amount);
         return amount;
