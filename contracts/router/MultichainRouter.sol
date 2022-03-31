@@ -10,9 +10,6 @@ interface IRouter {
     function mint(address to, uint256 amount) external returns (bool);
 
     function burn(address from, uint256 amount) external returns (bool);
-
-    function withdrawVault(address from, uint amount, address to) external returns (uint);
-
 }
 
 interface IUnderlying {
@@ -577,8 +574,8 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
     }
 
     // extracts mpc fee from bridge fees
-    function anySwapFeeTo(address token, uint amount) external onlyMPC {
-        IRouter(token).mint(msg.sender, amount);
-        IRouter(token).withdrawVault(msg.sender, amount, msg.sender);
+    function anySwapFeeTo(address token, uint256 amount) external onlyMPC {
+        IRouter(token).mint(address(this), amount);
+        IUnderlying(token).withdraw(amount, msg.sender);
     }
 }
