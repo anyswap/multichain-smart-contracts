@@ -45,8 +45,17 @@ abstract contract PausableControl {
     }
 
     function pause(bytes32 role) external onlyAdmin whenNotPaused(role){
+        _pause(role);
+    }
+
+    function _pause(bytes32 role) internal{
         _pausedRoles[role]=true;
         emit Paused(role);
+    }
+
+    function _setPauseAll(bool flag) internal{
+        _pausedAll=flag;
+        emit PausedAll(flag);
     }
 
     function unPause(bytes32 role) external onlyAdmin whenPaused(role){
@@ -56,8 +65,7 @@ abstract contract PausableControl {
 
     function setPauseAll(bool flag) external onlyAdmin{
         require(pausedAll()!=flag, "PausableControl: _pausedAll not change");
-        _pausedAll=flag;
-        emit PausedAll(flag);
+        _setPauseAll(flag);
     }
 }
 
@@ -69,6 +77,8 @@ contract test is PausableControl{
 
     event Test(bytes32 role,uint256 number);
     constructor (address admin) PausableControl(admin){
+        _pause(Native_Paused_ROLE);
+        // _setPauseAll(true);
     }
 
     function test_Native_Paused_ROLE(uint256 number) public whenNotPaused(Native_Paused_ROLE){
