@@ -222,10 +222,13 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         );
     }
 
-    function _anySwapOutUnderlying(address token, uint256 amount) internal {
+    function _anySwapOutUnderlying(address token, uint256 amount) internal returns (uint256) {
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
+        uint256 old_balance = IERC20(_underlying).balanceOf(token);
         IERC20(_underlying).safeTransferFrom(msg.sender, token, amount);
+        uint256 new_balance = IERC20(_underlying).balanceOf(token);
+        return new_balance > old_balance ? new_balance - old_balance : 0;
     }
 
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying`
@@ -235,12 +238,12 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 toChainID
     ) external {
-        _anySwapOutUnderlying(token, amount);
+        uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            amount,
+            recvAmount,
             block.chainid,
             toChainID
         );
@@ -253,12 +256,12 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         uint256 amount,
         uint256 toChainID
     ) external {
-        _anySwapOutUnderlying(token, amount);
+        uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOut(
             token,
             msg.sender,
             to,
-            amount,
+            recvAmount,
             block.chainid,
             toChainID
         );
@@ -273,12 +276,12 @@ contract MultichainRouter is MPCManageable, ReentrancyGuard {
         string memory anycallProxy,
         bytes calldata data
     ) external {
-        _anySwapOutUnderlying(token, amount);
+        uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOutAndCall(
             token,
             msg.sender,
             to,
-            amount,
+            recvAmount,
             block.chainid,
             toChainID,
             anycallProxy,
