@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.6;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-
-contract AnyCallProxy is ReentrancyGuard {
+contract AnycallV5Proxy {
     // Context information for destination chain targets
     struct Context {
         address sender;
@@ -14,12 +12,6 @@ contract AnyCallProxy is ReentrancyGuard {
     struct FeeData {
         uint128 accruedFees;
         uint128 premium;
-    }
-
-    // Packed MPC transfer info (only 1 storage slot)
-    struct TransferData {
-        uint96 effectiveTime;
-        address pendingMPC;
     }
 
     // Extra cost of execution (SSTOREs.SLOADs,ADDs,etc..)
@@ -36,6 +28,14 @@ contract AnyCallProxy is ReentrancyGuard {
     uint256 public minReserveBudget;
     mapping(address => uint256) public executionBudget;
     FeeData private _feeData;
+
+    uint private unlocked = 1;
+    modifier lock() {
+        require(unlocked == 1);
+        unlocked = 0;
+        _;
+        unlocked = 1;
+    }
 
     event LogAnyCall(
         address indexed from,
@@ -56,7 +56,7 @@ contract AnyCallProxy is ReentrancyGuard {
     );
 
     event Deposit(address indexed account, uint256 amount);
-    event Withdrawl(address indexed account, uint256 amount);
+    event Withdraw(address indexed account, uint256 amount);
     event SetBlacklist(address indexed account, bool flag);
     event SetWhitelist(
         address indexed from,
@@ -109,6 +109,7 @@ contract AnyCallProxy is ReentrancyGuard {
     ) external {
         require(!blacklist[msg.sender]); // dev: caller is blacklisted
         require(whitelist[msg.sender][_to][_toChainID]); // dev: request denied
+        require(_fallback == address(0) || _fallback == msg.sender);
 
         emit LogAnyCall(msg.sender, _to, _data, _fallback, _toChainID);
     }
@@ -128,7 +129,7 @@ contract AnyCallProxy is ReentrancyGuard {
         bytes calldata _data,
         address _fallback,
         uint256 _fromChainID
-    ) external nonReentrant charge(_from) onlyMPC {
+    ) external lock charge(_from) onlyMPC {
         context = Context({sender: _from, fromChainID: _fromChainID});
         (bool success, bytes memory result) = _to.call(_data);
         context = Context({sender: address(0), fromChainID: 0});
@@ -140,7 +141,7 @@ contract AnyCallProxy is ReentrancyGuard {
         if (!success && _fallback != address(0)) {
             emit LogAnyCall(
                 _from,
-                _fallback,
+                _from,
                 abi.encodeWithSignature("anyFallback(address,bytes)", _to, _data),
                 address(0),
                 _fromChainID
@@ -159,7 +160,7 @@ contract AnyCallProxy is ReentrancyGuard {
     /// @param _amount The amount to withdraw from your account
     function withdraw(uint256 _amount) external {
         executionBudget[msg.sender] -= _amount;
-        emit Withdrawl(msg.sender, _amount);
+        emit Withdraw(msg.sender, _amount);
         (bool success,) = msg.sender.call{value: _amount}("");
         require(success);
     }

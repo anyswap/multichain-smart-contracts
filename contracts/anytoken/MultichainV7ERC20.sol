@@ -4,11 +4,10 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract MultichainERC20 is ERC20Capped, ERC20Burnable, ERC20Permit, AccessControlEnumerable {
+contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerable {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     struct Supply {
@@ -41,7 +40,6 @@ contract MultichainERC20 is ERC20Capped, ERC20Burnable, ERC20Permit, AccessContr
     )
     ERC20(_name, _symbol)
     ERC20Capped(_cap)
-    ERC20Permit(_name)
     {
         _tokenDecimals = _decimals;
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
@@ -166,7 +164,7 @@ contract MultichainERC20 is ERC20Capped, ERC20Burnable, ERC20Permit, AccessContr
     }
 }
 
-contract MultichainERC20WithUnderlying is MultichainERC20 {
+contract MultichainV7ERC20WithUnderlying is MultichainV7ERC20 {
     using SafeERC20 for IERC20;
 
     address public immutable override underlying;
@@ -181,7 +179,7 @@ contract MultichainERC20WithUnderlying is MultichainERC20 {
         uint256 _cap,
         address _admin,
         address _underlying
-    ) MultichainERC20(_name, _symbol, _decimals, _cap, _admin) {
+    ) MultichainV7ERC20(_name, _symbol, _decimals, _cap, _admin) {
         require(_underlying != address(0), "underlying is the zero address");
         require(_underlying != address(this), "underlying is same to address(this)");
         require(_decimals == IERC20Metadata(_underlying).decimals(), "decimals mismatch");

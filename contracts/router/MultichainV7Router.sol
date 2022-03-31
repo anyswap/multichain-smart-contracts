@@ -51,7 +51,7 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
-contract MultichainRouter is MPCManageable, ReentrancyGuard {
+contract MultichainV7Router is MPCManageable, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
 
