@@ -52,7 +52,7 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
-contract MultichainV7Router is MPCManageable,PausableControl, ReentrancyGuard {
+contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
 
@@ -72,6 +72,7 @@ contract MultichainV7Router is MPCManageable,PausableControl, ReentrancyGuard {
         keccak256("Underlying_Paused_ROLE");
     bytes32 public constant Native_Paused_ROLE =
         keccak256("Native_Paused_ROLE");
+
     address public immutable wNATIVE;
 
     mapping(address => bool) public supportedAnycallProxy;
@@ -128,7 +129,7 @@ contract MultichainV7Router is MPCManageable,PausableControl, ReentrancyGuard {
         address _mpc,
         address _wNATIVE,
         address[] memory _anycallProxies
-    ) MPCManageable(_mpc) PausableControl(_admin){
+    ) MPCManageable(_mpc) PausableControlWithAdmin(_admin){
         wNATIVE = _wNATIVE;
         for(uint256 i = 0; i < _anycallProxies.length; i++) {
             supportedAnycallProxy[_anycallProxies[i]] = true;
