@@ -22,6 +22,7 @@ contract AnycallV5Proxy {
 
     mapping(address => bool) public blacklist;
     mapping(address => mapping(address => mapping(uint256 => bool))) public whitelist;
+    bool public freeTestMode;
 
     Context public context;
 
@@ -67,9 +68,10 @@ contract AnycallV5Proxy {
     event TransferMPC(address oldMPC, address newMPC, uint256 effectiveTime);
     event UpdatePremium(uint256 oldPremium, uint256 newPremium);
 
-    constructor(address _mpc, uint128 _premium) {
+    constructor(address _mpc, uint128 _premium, bool _freeTestMode) {
         mpc = _mpc;
         _feeData.premium = _premium;
+        freeTestMode = _freeTestMode;
 
         emit TransferMPC(address(0), _mpc, block.timestamp);
         emit UpdatePremium(0, _premium);
@@ -84,13 +86,19 @@ contract AnycallV5Proxy {
     /// @dev Charge an account for execution costs on this chain
     /// @param _from The account to charge for execution costs
     modifier charge(address _from) {
-        require(executionBudget[_from] >= minReserveBudget);
+        require(freeTestMode || executionBudget[_from] >= minReserveBudget);
         uint256 gasUsed = gasleft() + EXECUTION_OVERHEAD;
         _;
-        uint256 totalCost = (gasUsed - gasleft()) * (tx.gasprice + _feeData.premium);
+        if (!freeTestMode) {
+            uint256 totalCost = (gasUsed - gasleft()) * (tx.gasprice + _feeData.premium);
+            executionBudget[_from] -= totalCost;
+            _feeData.accruedFees += uint128(totalCost);
+        }
+    }
 
-        executionBudget[_from] -= totalCost;
-        _feeData.accruedFees += uint128(totalCost);
+    /// @dev set freeTestMode flag to allow enable/disable test mode
+    function setFreeTestMode(bool _freeTestMode) external onlyMPC {
+        freeTestMode = _freeTestMode;
     }
 
     /**
@@ -108,7 +116,7 @@ contract AnycallV5Proxy {
         uint256 _toChainID
     ) external {
         require(!blacklist[msg.sender]); // dev: caller is blacklisted
-        require(whitelist[msg.sender][_to][_toChainID]); // dev: request denied
+        require(freeTestMode || whitelist[msg.sender][_to][_toChainID]); // dev: request denied
         require(_fallback == address(0) || _fallback == msg.sender);
 
         emit LogAnyCall(msg.sender, _to, _data, _fallback, _toChainID);

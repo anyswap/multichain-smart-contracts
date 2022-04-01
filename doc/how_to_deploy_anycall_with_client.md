@@ -16,6 +16,12 @@ contracts/
 
 ## 1. delpoy `AnycallV5Proxy` same as normal anycall deployment
 
+```text
+    constructor(address _mpc, uint128 _premium, bool _freeTestMode)
+```
+
+when `_freeTestMode` is true, the whitelist will be disable and no fee will be payed.
+
 
 ## 2. deploy `AaveV3PoolAnycallClient` as upgradable
 
