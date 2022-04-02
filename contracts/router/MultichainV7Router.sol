@@ -129,7 +129,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address _mpc,
         address _wNATIVE,
         address[] memory _anycallProxies
-    ) MPCManageable(_mpc) PausableControlWithAdmin(_admin){
+    ) MPCManageable(_mpc) PausableControlWithAdmin(_admin) {
         wNATIVE = _wNATIVE;
         for(uint256 i = 0; i < _anycallProxies.length; i++) {
             supportedAnycallProxy[_anycallProxies[i]] = true;
@@ -186,7 +186,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address to,
         uint256 amount,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE){
+    ) external whenNotPaused(Swapout_Paused_ROLE) {
         assert(IRouter(token).burn(msg.sender, amount));
         emit LogAnySwapOut(
             token,
@@ -204,7 +204,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         string memory to,
         uint256 amount,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE){
+    ) external whenNotPaused(Swapout_Paused_ROLE) {
         assert(IRouter(token).burn(msg.sender, amount));
         emit LogAnySwapOut(
             token,
@@ -224,7 +224,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 toChainID,
         string memory anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapout_Paused_ROLE) whenNotPaused(Call_Paused_ROLE){
+    ) external whenNotPaused(Swapout_Paused_ROLE) whenNotPaused(Call_Paused_ROLE) {
         assert(IRouter(token).burn(msg.sender, amount));
         emit LogAnySwapOutAndCall(
             token,
@@ -238,7 +238,12 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         );
     }
 
-    function _anySwapOutUnderlying(address token, uint256 amount) internal whenNotPaused(Underlying_Paused_ROLE) returns (uint256) {
+    function _anySwapOutUnderlying(address token, uint256 amount)
+        internal
+        whenNotPaused(Swapout_Paused_ROLE)
+        whenNotPaused(Underlying_Paused_ROLE)
+        returns (uint256)
+    {
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
         uint256 old_balance = IERC20(_underlying).balanceOf(token);
@@ -253,7 +258,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address to,
         uint256 amount,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE){
+    ) external {
         uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOut(
             token,
@@ -271,7 +276,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         string memory to,
         uint256 amount,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE){
+    ) external {
         uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOut(
             token,
@@ -291,7 +296,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 toChainID,
         string memory anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapout_Paused_ROLE) whenNotPaused(Call_Paused_ROLE){
+    ) external whenNotPaused(Call_Paused_ROLE) {
         uint256 recvAmount = _anySwapOutUnderlying(token, amount);
         emit LogAnySwapOutAndCall(
             token,
@@ -305,7 +310,11 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         );
     }
 
-    function _anySwapOutNative(address token) internal whenNotPaused(Native_Paused_ROLE){
+    function _anySwapOutNative(address token)
+        internal
+        whenNotPaused(Swapout_Paused_ROLE)
+        whenNotPaused(Native_Paused_ROLE)
+    {
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
             IUnderlying(token).underlying() == wNATIVE,
@@ -320,7 +329,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address token,
         address to,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE) payable {
+    ) external payable {
         _anySwapOutNative(token);
         emit LogAnySwapOut(
             token,
@@ -337,7 +346,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address token,
         string memory to,
         uint256 toChainID
-    ) external whenNotPaused(Swapout_Paused_ROLE) payable {
+    ) external payable {
         _anySwapOutNative(token);
         emit LogAnySwapOut(
             token,
@@ -356,7 +365,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 toChainID,
         string memory anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapout_Paused_ROLE) whenNotPaused(Call_Paused_ROLE) payable {
+    ) external whenNotPaused(Call_Paused_ROLE) payable {
         _anySwapOutNative(token);
         emit LogAnySwapOutAndCall(
             token,
@@ -391,7 +400,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address to,
         uint256 amount,
         uint256 fromChainID
-    ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
+    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Underlying_Paused_ROLE) nonReentrant onlyMPC {
         require(!swapinExisted[txs], "swapin existed");
         swapinExisted[txs] = true;
         require(
@@ -410,7 +419,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address to,
         uint256 amount,
         uint256 fromChainID
-    ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
+    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Native_Paused_ROLE) nonReentrant onlyMPC {
         require(!swapinExisted[txs], "swapin existed");
         swapinExisted[txs] = true;
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
@@ -436,6 +445,11 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         require(!swapinExisted[txs], "swapin existed");
         swapinExisted[txs] = true;
         address _underlying = IUnderlying(token).underlying();
+        require(
+            _underlying == address(0) ||
+            (_underlying == wNATIVE && !paused(Native_Paused_ROLE)) ||
+            (_underlying != wNATIVE && !paused(Underlying_Paused_ROLE))
+        );
         if (
             _underlying != address(0) &&
             IERC20(_underlying).balanceOf(token) >= amount
@@ -517,7 +531,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 fromChainID,
         address anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
+    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Underlying_Paused_ROLE) nonReentrant onlyMPC {
         require(!swapinExisted[txs], "swapin existed");
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
         swapinExisted[txs] = true;
@@ -553,12 +567,10 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
     }
 
     // Deposit `msg.value` `Native` to `token` address and mint `msg.value` `token` to `to`
-    function depositNative(address token, address to)
-        external
-        whenNotPaused(Deposit_Paused_ROLE)
-        payable
-        returns (uint256)
-    {
+    function depositNative(
+        address token,
+        address to
+    ) external payable whenNotPaused(Deposit_Paused_ROLE) returns (uint256) {
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
             IUnderlying(token).underlying() == wNATIVE,
@@ -575,7 +587,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address token,
         uint256 amount,
         address to
-    ) external nonReentrant whenNotPaused(Withdraw_Paused_ROLE) returns (uint256) {
+    ) external whenNotPaused(Withdraw_Paused_ROLE) nonReentrant returns (uint256) {
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
             IUnderlying(token).underlying() == wNATIVE,

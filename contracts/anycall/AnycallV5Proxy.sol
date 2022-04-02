@@ -23,6 +23,7 @@ contract AnycallV5Proxy {
     mapping(address => bool) public blacklist;
     mapping(address => mapping(address => mapping(uint256 => bool))) public whitelist;
     bool public freeTestMode;
+    bool public paused;
 
     Context public context;
 
@@ -83,6 +84,12 @@ contract AnycallV5Proxy {
         _;
     }
 
+    /// @dev pausable control function
+    modifier whenNotPaused() {
+        require(!paused); // dev: when not paused
+        _;
+    }
+
     /// @dev Charge an account for execution costs on this chain
     /// @param _from The account to charge for execution costs
     modifier charge(address _from) {
@@ -101,6 +108,11 @@ contract AnycallV5Proxy {
         freeTestMode = _freeTestMode;
     }
 
+    /// @dev set paused flag to pause/unpause functions
+    function setPaused(bool _paused) external onlyMPC {
+        paused = _paused;
+    }
+
     /**
         @notice Submit a request for a cross chain interaction
         @param _to The target to interact with on `_toChainID`
@@ -114,7 +126,7 @@ contract AnycallV5Proxy {
         bytes calldata _data,
         address _fallback,
         uint256 _toChainID
-    ) external {
+    ) external whenNotPaused {
         require(!blacklist[msg.sender]); // dev: caller is blacklisted
         require(freeTestMode || whitelist[msg.sender][_to][_toChainID]); // dev: request denied
         require(_fallback == address(0) || _fallback == msg.sender);
@@ -137,7 +149,7 @@ contract AnycallV5Proxy {
         bytes calldata _data,
         address _fallback,
         uint256 _fromChainID
-    ) external lock charge(_from) onlyMPC {
+    ) external lock whenNotPaused charge(_from) onlyMPC {
         context = Context({sender: _from, fromChainID: _fromChainID});
         (bool success, bytes memory result) = _to.call(_data);
         context = Context({sender: address(0), fromChainID: 0});

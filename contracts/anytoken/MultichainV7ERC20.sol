@@ -6,9 +6,16 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Capped.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../access/PausableControl.sol";
 
-contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerable {
+contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerable, PausableControl {
+    // access control roles
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
+    // pausable control roles
+    bytes32 public constant PAUSE_MINT_ROLE = keccak256("PAUSE_MINT_ROLE");
+    bytes32 public constant PAUSE_BURN_ROLE = keccak256("PAUSE_BURN_ROLE");
+    bytes32 public constant PAUSE_TRANSFER_ROLE = keccak256("PAUSE_TRANSFER_ROLE");
 
     struct Supply {
         uint256 max; // single limit of each mint
@@ -17,12 +24,6 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
     }
 
     mapping(address => Supply) public minterSupply;
-
-    // switches to control minters' mint and burn action
-    bool public allMintPaused; // pause all minters' mint calling
-    bool public allBurnPaused; // pause all minters' burn calling (normal user is not paused)
-    mapping(address => bool) public mintPaused; // pause specify minters' mint calling
-    mapping(address => bool) public burnPaused; // pause specify minters' burn calling
 
     uint8 immutable _tokenDecimals;
 
@@ -57,9 +58,28 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
         return address(0);
     }
 
+    function pause(bytes32 role) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pause(role);
+    }
+
+    function unpause(bytes32 role) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause(role);
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override {
+        super._beforeTokenTransfer(from, to, amount);
+
+        require(!paused(PAUSE_TRANSFER_ROLE), "token transfer while paused");
+    }
+
     function _mint(address to, uint256 amount) internal virtual override(ERC20, ERC20Capped) {
         require(to != address(this), "forbid mint to address(this)");
-        require(!allMintPaused && !mintPaused[msg.sender], "mint paused");
+        require(!paused(PAUSE_MINT_ROLE), "mint paused");
+
         Supply storage s = minterSupply[msg.sender];
         require(amount <= s.max, "minter max exceeded");
         s.total += amount;
@@ -69,9 +89,10 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
     }
 
     function _burn(address from, uint256 amount) internal virtual override {
+        require(from != address(this), "forbid burn from address(this)");
+        require(!paused(PAUSE_BURN_ROLE), "burn paused");
+
         if (hasRole(MINTER_ROLE, msg.sender)) {
-            require(from != address(this), "forbid burn from address(this)");
-            require(!allBurnPaused && !burnPaused[msg.sender], "burn paused");
             Supply storage s = minterSupply[msg.sender];
             require(s.total >= amount, "minter burn amount exceeded");
             s.total -= amount;
@@ -100,7 +121,7 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
 
     function Swapout(uint256 amount, address bindaddr) external returns (bool) {
         require(bindaddr != address(0), "zero bind address");
-        super._burn(msg.sender, amount);
+        _burn(msg.sender, amount);
         emit LogSwapout(msg.sender, bindaddr, amount);
         return true;
     }
@@ -109,8 +130,6 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
         _grantRole(MINTER_ROLE, minter);
         minterSupply[minter].cap = cap;
         minterSupply[minter].max = max;
-        mintPaused[minter] = false;
-        burnPaused[minter] = false;
     }
 
     function removeMinter(address minter) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -132,35 +151,6 @@ contract MultichainV7ERC20 is ERC20Capped, ERC20Burnable, AccessControlEnumerabl
     function setMinterTotal(address minter, uint256 total, bool force) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(force || hasRole(MINTER_ROLE, minter), "not minter");
         minterSupply[minter].total = total;
-    }
-
-    function setAllMintPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allMintPaused = paused;
-    }
-
-    function setAllBurnPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allBurnPaused = paused;
-    }
-
-    function setAllMintAndBurnPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allMintPaused = paused;
-        allBurnPaused = paused;
-    }
-
-    function setMintPaused(address minter, bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(hasRole(MINTER_ROLE, minter), "not minter");
-        mintPaused[minter] = paused;
-    }
-
-    function setBurnPaused(address minter, bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(hasRole(MINTER_ROLE, minter), "not minter");
-        burnPaused[minter] = paused;
-    }
-
-    function setMintAndBurnPaused(address minter, bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(hasRole(MINTER_ROLE, minter), "not minter");
-        mintPaused[minter] = paused;
-        burnPaused[minter] = paused;
     }
 }
 
