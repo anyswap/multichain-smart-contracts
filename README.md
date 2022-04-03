@@ -1,5 +1,24 @@
 # multichain smart contract
 
+This repository is used for new smart contracts of `multichain`,
+mainly for bridge, router, and anycall functions.
+
+This repository also have upgradation smart contracts of
+[anyswap-v1-core](https://github.com/anyswap/anyswap-v1-core.git)
+with vesrions start from v7.
+
+for example,
+
+```text
+contracts/
+├── anycall
+│   ├── AnycallV7Proxy.sol
+├── anytoken
+│   └── MultichainV7ERC20.sol
+└── router
+    └── MultichainV7Router.sol
+```
+
 ## install dependencies
 
 ```shell
@@ -50,6 +69,4 @@ privateKey: ''
 ```shell
 node test/SushiswapTradeProxy.js
 ```
-
-
 
