@@ -5,7 +5,7 @@ pragma solidity ^0.8.10;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
-
+import "../access/PausableControl.sol";
 
 library TokenOperation {
     using Address for address;
@@ -67,16 +67,31 @@ interface IRouter {
     function burn(address from, uint256 amount) external returns (bool);
 }
 
-contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
+/// @dev MintBurnWrapper has the following aims:
+/// 1. wrap token which does not support interface `IBridge` or `IRouter`
+/// 2. wrap token which want to support multiple minters
+/// 3. add security enhancement (mint cap, pausable, etc.)
+contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableControl {
     using SafeERC20 for IERC20;
+
+    // access control roles
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BRIDGE_ROLE = keccak256("BRIDGE_ROLE");
+    bytes32 public constant ROUTER_ROLE = keccak256("ROUTER_ROLE");
+
+    // pausable control roles
+    bytes32 public constant PAUSE_MINT_ROLE = keccak256("PAUSE_MINT_ROLE");
+    bytes32 public constant PAUSE_BURN_ROLE = keccak256("PAUSE_BURN_ROLE");
+    bytes32 public constant PAUSE_BRIDGE_ROLE = keccak256("PAUSE_BRIDGE_ROLE");
+    bytes32 public constant PAUSE_ROUTER_ROLE = keccak256("PAUSE_ROUTER_ROLE");
+    bytes32 public constant PAUSE_DEPOSIT_ROLE = keccak256("PAUSE_DEPOSIT_ROLE");
+    bytes32 public constant PAUSE_WITHDRAW_ROLE = keccak256("PAUSE_WITHDRAW_ROLE");
 
     struct Supply {
         uint256 max; // single limit of each mint
         uint256 cap; // total limit of all mint
         uint256 total; // total minted minus burned
     }
-
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     mapping(address => Supply) public minterSupply;
     uint256 public totalMintCap; // total mint cap
@@ -92,9 +107,6 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
 
     address public immutable token; // the target token this contract is wrapping
     TokenType public immutable tokenType;
-
-    bool public allMintPaused; // pause all mint calling
-    bool public allBurnPaused; // pause all burn calling
 
     mapping(address => uint256) public depositBalance;
     mapping(bytes32 => bool) public swapinExisted;
@@ -112,9 +124,16 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         return getRoleMember(DEFAULT_ADMIN_ROLE, 0);
     }
 
-    function _mint(address to, uint256 amount) internal {
+    function pause(bytes32 role) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _pause(role);
+    }
+
+    function unpause(bytes32 role) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause(role);
+    }
+
+    function _mint(address to, uint256 amount) internal whenNotPaused(PAUSE_MINT_ROLE) {
         require(to != address(this), "forbid mint to address(this)");
-        require(!allMintPaused, "mint paused");
 
         Supply storage s = minterSupply[msg.sender];
         require(amount <= s.max, "minter max exceeded");
@@ -130,9 +149,8 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
         }
     }
 
-    function _burn(address from, uint256 amount) internal {
+    function _burn(address from, uint256 amount) internal whenNotPaused(PAUSE_BURN_ROLE) {
         require(from != address(this), "forbid burn from address(this)");
-        require(!allBurnPaused, "burn paused");
 
         if (hasRole(MINTER_ROLE, msg.sender)) {
             Supply storage s = minterSupply[msg.sender];
@@ -155,19 +173,35 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     }
 
     // impl IRouter `mint`
-    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) returns (bool) {
+    function mint(address to, uint256 amount)
+        external
+        onlyRole(MINTER_ROLE)
+        returns (bool)
+    {
         _mint(to, amount);
         return true;
     }
 
     // impl IRouter `burn`
-    function burn(address from, uint256 amount) external onlyRole(MINTER_ROLE) returns (bool) {
+    function burn(address from, uint256 amount)
+        external
+        onlyRole(MINTER_ROLE)
+        onlyRole(ROUTER_ROLE)
+        whenNotPaused(PAUSE_ROUTER_ROLE)
+        returns (bool)
+    {
         _burn(from, amount);
         return true;
     }
 
     // impl IBridge `Swapin`
-    function Swapin(bytes32 txhash, address account, uint256 amount) external onlyRole(MINTER_ROLE) returns (bool) {
+    function Swapin(bytes32 txhash, address account, uint256 amount)
+        external
+        onlyRole(MINTER_ROLE)
+        onlyRole(BRIDGE_ROLE)
+        whenNotPaused(PAUSE_BRIDGE_ROLE)
+        returns (bool)
+    {
         require(!swapinExisted[txhash], "swapin existed");
         swapinExisted[txhash] = true;
         _mint(account, amount);
@@ -176,21 +210,33 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     }
 
     // impl IBridge `Swapout`
-    function Swapout(uint256 amount, address bindaddr) public returns (bool) {
+    function Swapout(uint256 amount, address bindaddr)
+        external
+        whenNotPaused(PAUSE_BRIDGE_ROLE)
+        returns (bool)
+    {
         require(bindaddr != address(0), "zero bind address");
         _burn(msg.sender, amount);
         emit LogSwapout(msg.sender, bindaddr, amount);
         return true;
     }
 
-    function deposit(uint256 amount, address to) external returns (uint256) {
+    function deposit(uint256 amount, address to)
+        external
+        whenNotPaused(PAUSE_DEPOSIT_ROLE)
+        returns (uint256)
+    {
         require(tokenType == TokenType.TransferDeposit, "forbid depoist");
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         depositBalance[to] += amount;
         return amount;
     }
 
-    function withdraw(uint256 amount, address to) external returns (uint256) {
+    function withdraw(uint256 amount, address to)
+        external
+        whenNotPaused(PAUSE_WITHDRAW_ROLE)
+        returns (uint256)
+    {
         require(tokenType == TokenType.TransferDeposit, "forbid withdraw");
         depositBalance[msg.sender] -= amount;
         IERC20(token).safeTransfer(to, amount);
@@ -226,18 +272,5 @@ contract MintBurnWrapper is AccessControlEnumerable, IBridge, IRouter {
     function setMinterTotal(address minter, uint256 total, bool force) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(force || hasRole(MINTER_ROLE, minter), "not minter");
         minterSupply[minter].total = total;
-    }
-
-    function setAllMintPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allMintPaused = paused;
-    }
-
-    function setAllBurnPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allBurnPaused = paused;
-    }
-
-    function setAllMintAndBurnPaused(bool paused) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        allMintPaused = paused;
-        allBurnPaused = paused;
     }
 }
