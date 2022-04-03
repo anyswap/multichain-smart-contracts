@@ -3,7 +3,7 @@ pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../access/MPCManageable.sol";
-import "../../access/PausableControl.sol";
+import "../../access/PausableControlWithAdmin.sol";
 
 interface IAaveV3Pool {
     function mintUnbacked(
@@ -31,38 +31,18 @@ interface IAnycallProxy {
     ) external;
 }
 
-abstract contract AnycallClientBase is PausableControl {
-    address public admin;
+abstract contract AnycallClientBase is PausableControlWithAdmin {
     address public callProxy;
     mapping(uint256 => address) public clientPeers; // key is chainId
-
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "AnycallClient: not authorized");
-        _;
-    }
 
     modifier onlyCallProxy() {
         require(msg.sender == callProxy, "AnycallClient: not authorized");
         _;
     }
 
-    constructor(address _admin, address _callProxy) {
-        require(_admin != address(0) && _callProxy != address(0));
-        admin = _admin;
+    constructor(address _admin, address _callProxy) PausableControlWithAdmin(_admin) {
+        require(_callProxy != address(0));
         callProxy = _callProxy;
-    }
-
-    function pause(bytes32 role) external onlyAdmin {
-        _pause(role);
-    }
-
-    function unpause(bytes32 role) external onlyAdmin {
-        _unpause(role);
-    }
-
-    function setAdmin(address _admin) external onlyAdmin {
-        require(_admin != address(0));
-        admin = _admin;
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
@@ -92,6 +72,12 @@ abstract contract AnycallClientBase is PausableControl {
 
 contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
     using SafeERC20 for IERC20;
+
+    // pausable control roles
+    bytes32 public constant PAUSE_CALLOUT_ROLE = keccak256("PAUSE_CALLOUT_ROLE");
+    bytes32 public constant PAUSE_CALLIN_ROLE = keccak256("PAUSE_CALLIN_ROLE");
+    bytes32 public constant PAUSE_FALLBACK_ROLE = keccak256("PAUSE_FALLBACK_ROLE");
+    bytes32 public constant PAUSE_BACK_ROLE = keccak256("PAUSE_BACK_ROLE");
 
     address public aaveV3Pool;
     uint16 public referralCode;
@@ -145,7 +131,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         address asset,
         uint256 amount,
         uint256 fee
-    ) external onlyMPC whenNotPaused(PAUSE_ALL_ROLE) {
+    ) external onlyMPC whenNotPaused(PAUSE_BACK_ROLE) {
         IAaveV3Pool(aaveV3Pool).backUnbacked(asset, amount, fee);
     }
 
@@ -154,7 +140,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         uint256 amount,
         address receiver,
         uint256 toChainId
-    ) external whenNotPaused(PAUSE_ALL_ROLE) {
+    ) external whenNotPaused(PAUSE_CALLOUT_ROLE) {
         address clientPeer = clientPeers[toChainId];
         require(clientPeer != address(0), "AnycallClient: no dest client");
 
@@ -189,7 +175,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         address sender,
         address receiver,
         uint256 /*toChainId*/ // used in anyFallback
-    ) external onlyCallProxy whenNotPaused(PAUSE_ALL_ROLE) {
+    ) external onlyCallProxy whenNotPaused(PAUSE_CALLIN_ROLE) {
         (address from, uint256 fromChainId) = IAnycallProxy(callProxy).context();
         require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
         require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
@@ -206,7 +192,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
     function _anyFallback(
         address to,
         bytes calldata data
-    ) internal override whenNotPaused(PAUSE_ALL_ROLE) {
+    ) internal override whenNotPaused(PAUSE_FALLBACK_ROLE) {
         (
             address srcToken,
             address dstToken,

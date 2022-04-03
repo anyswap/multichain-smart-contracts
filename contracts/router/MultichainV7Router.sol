@@ -5,7 +5,7 @@ pragma solidity ^0.8.10;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../access/MPCManageable.sol";
-import "../access/PausableControl.sol";
+import "../access/PausableControlWithAdmin.sol";
 
 interface IRouter {
     function mint(address to, uint256 amount) external returns (bool);

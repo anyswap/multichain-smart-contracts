@@ -5,7 +5,7 @@ pragma solidity ^0.8.10;
 abstract contract PausableControl {
     mapping(bytes32 => bool) private _pausedRoles;
 
-    bytes32 public constant PAUSE_ALL_ROLE = keccak256("PAUSE_ALL_ROLE");
+    bytes32 public constant PAUSE_ALL_ROLE = 0x00;
 
     event Paused(bytes32 role);
     event Unpaused(bytes32 role);
@@ -38,26 +38,5 @@ abstract contract PausableControl {
     function _unpause(bytes32 role) internal virtual whenPaused(role) {
         _pausedRoles[role] = false;
         emit Unpaused(role);
-    }
-}
-
-abstract contract PausableControlWithAdmin is PausableControl {
-    address public admin;
-
-    event ChangeAdmin(address indexed _old, address indexed _new);
-
-    constructor(address _admin) {
-        admin = _admin;
-    }
-
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "PausableControl: not admin");
-        _;
-    }
-
-    function changeAdmin(address _admin) external onlyAdmin {
-        require(_admin != address(0), "PausableControl: address(0)");
-        emit ChangeAdmin(admin, _admin);
-        admin = _admin;
     }
 }

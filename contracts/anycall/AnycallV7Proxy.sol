@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.6;
 
-contract AnycallV7Proxy {
+import "../access/AdminControl.sol";
+
+contract AnycallV7Proxy is AdminControl {
     // Context information for destination chain targets
     struct Context {
         address sender;
@@ -69,7 +71,12 @@ contract AnycallV7Proxy {
     event TransferMPC(address oldMPC, address newMPC, uint256 effectiveTime);
     event UpdatePremium(uint256 oldPremium, uint256 newPremium);
 
-    constructor(address _mpc, uint128 _premium, bool _freeTestMode) {
+    constructor(
+        address _admin,
+        address _mpc,
+        uint128 _premium,
+        bool _freeTestMode
+    ) AdminControl(_admin) {
         mpc = _mpc;
         _feeData.premium = _premium;
         freeTestMode = _freeTestMode;
@@ -109,7 +116,7 @@ contract AnycallV7Proxy {
     }
 
     /// @dev set paused flag to pause/unpause functions
-    function setPaused(bool _paused) external onlyMPC {
+    function setPaused(bool _paused) external onlyAdmin {
         paused = _paused;
     }
 
