@@ -76,7 +76,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
     address public immutable wNATIVE;
 
     mapping(address => bool) public supportedAnycallProxy;
-    mapping(bytes32 => bool) public swapinExisted;
 
     event LogAnySwapIn(
         bytes32 indexed txhash,
@@ -387,8 +386,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
-        swapinExisted[txs] = true;
         assert(IRouter(token).mint(to, amount));
         emit LogAnySwapIn(txs, token, to, amount, fromChainID, block.chainid);
     }
@@ -401,8 +398,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Underlying_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
-        swapinExisted[txs] = true;
         require(
             IUnderlying(token).underlying() != address(0),
             "MultichainRouter: zero underlying"
@@ -420,8 +415,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Native_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
-        swapinExisted[txs] = true;
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
             IUnderlying(token).underlying() == wNATIVE,
@@ -442,8 +435,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
-        swapinExisted[txs] = true;
         address _underlying = IUnderlying(token).underlying();
         require(
             _underlying == address(0) ||
@@ -496,9 +487,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address anycallProxy,
         bytes calldata data
     ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
-        swapinExisted[txs] = true;
 
         bool success;
         bytes memory result;
@@ -532,9 +521,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address anycallProxy,
         bytes calldata data
     ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Underlying_Paused_ROLE) nonReentrant onlyMPC {
-        require(!swapinExisted[txs], "swapin existed");
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
-        swapinExisted[txs] = true;
 
         address _underlying = IUnderlying(token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");

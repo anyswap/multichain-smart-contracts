@@ -109,7 +109,6 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
     TokenType public immutable tokenType;
 
     mapping(address => uint256) public depositBalance;
-    mapping(bytes32 => bool) public swapinExisted;
 
     constructor(address _token, TokenType _tokenType, uint256 _totalMintCap, address _admin) {
         require(_token != address(0), "zero token address");
@@ -202,8 +201,6 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         whenNotPaused(PAUSE_BRIDGE_ROLE)
         returns (bool)
     {
-        require(!swapinExisted[txhash], "swapin existed");
-        swapinExisted[txhash] = true;
         _mint(account, amount);
         emit LogSwapin(txhash, account, amount);
         return true;
