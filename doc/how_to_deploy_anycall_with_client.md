@@ -7,14 +7,14 @@ related smart contracts
 ```text
 contracts/
 ├── anycall
-│   ├── AnycallV7Proxy.sol
+│   ├── AnyswapV5CallProxy.sol
 │   └── client
 │       └── AaveV3PoolAnycallClient.sol
 └── common
     └── UpgradableProxy.sol
 ```
 
-## 1. delpoy `AnycallV7Proxy` same as normal anycall deployment
+## 1. delpoy `AnyswapV5CallProxy` same as normal anycall deployment
 
 ```text
     constructor(
@@ -41,7 +41,7 @@ when `_freeTestMode` is true, the whitelist will be disable and no fee will be p
     )
 ```
 
-where `_callProxy` is the `AnycallV7Proxy` contract address,
+where `_callProxy` is the `AnyswapV5CallProxy` contract address,
 and `_aaveV3Pool` is the aave v3 pool contract address.
 
 ### 2.2 deploy `AnycallClientProxy` in `UpgradableProxy.sol`
@@ -95,7 +95,7 @@ the `chainIds` and `dstTokens` should have the order, that is the first `chainId
     ) external
 ```
 
-### 3.2 `AnycallV7Proxy` call `callin` of `AnycallClientProxy` on dest blockchain
+### 3.2 `AnyswapV5CallProxy` call `callin` of `AnycallClientProxy` on dest blockchain
 
 the mpc should verify tx of step 3.1 and then do the call
 

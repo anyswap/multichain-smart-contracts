@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.6;
 
-contract AnycallV7Proxy {
+contract AnyCallProxy {
     // Context information for destination chain targets
     struct Context {
         address sender;
