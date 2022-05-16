@@ -33,7 +33,7 @@ library TokenOperation {
         uint256 value
     ) internal {
         // burn(uint256)
-        _callOptionalReturn(token, abi.encodeWithSelector(0x42966c68, msg.sender, value));
+        _callOptionalReturn(token, abi.encodeWithSelector(0x42966c68, value));
     }
 
     function safeBurnFrom(
