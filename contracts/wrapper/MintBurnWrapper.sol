@@ -138,6 +138,7 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         require(amount <= s.max, "minter max exceeded");
         s.total += amount;
         require(s.total <= s.cap, "minter cap exceeded");
+
         totalMinted += amount;
         require(totalMinted <= totalMintCap, "total mint cap exceeded");
 
@@ -155,9 +156,10 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
             Supply storage s = minterSupply[msg.sender];
             require(s.total >= amount, "minter burn amount exceeded");
             s.total -= amount;
-            require(totalMinted >= amount, "total burn amount exceeded");
-            totalMinted -= amount;
         }
+
+        require(totalMinted >= amount, "total burn amount exceeded");
+        totalMinted -= amount;
 
         if (tokenType == TokenType.Transfer || tokenType == TokenType.TransferDeposit) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
