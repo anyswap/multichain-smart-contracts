@@ -285,4 +285,9 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         require(hasRole(MINTER_ROLE, msg.sender), "not minter");
         minterSupply[msg.sender].comintcap = cap;
     }
+
+    function setComintCap(address minter, uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(hasRole(MINTER_ROLE, minter), "not minter");
+        minterSupply[minter].comintcap = cap;
+    }
 }
