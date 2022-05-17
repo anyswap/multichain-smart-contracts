@@ -91,6 +91,7 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         uint256 max; // single limit of each mint
         uint256 cap; // total limit of all mint
         uint256 total; // total minted minus burned
+        uint256 comintcap; // total limit of cominters which is burned by this minter
     }
 
     mapping(address => Supply) public minterSupply;
@@ -154,8 +155,15 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
 
         if (hasRole(MINTER_ROLE, msg.sender)) {
             Supply storage s = minterSupply[msg.sender];
-            require(s.total >= amount, "minter burn amount exceeded");
-            s.total -= amount;
+            require(s.total + s.comintcap >= amount, "minter burn amount exceeded");
+            if (s.total >= amount) {
+                s.total -= amount;
+            } else if (s.total == 0) {
+                s.comintcap -= amount;
+            } else {
+                s.comintcap -= (amount - s.total);
+                s.total = 0;
+            }
         }
 
         require(totalMinted >= amount, "total burn amount exceeded");
@@ -271,5 +279,10 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
     function setMinterTotal(address minter, uint256 total, bool force) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(force || hasRole(MINTER_ROLE, minter), "not minter");
         minterSupply[minter].total = total;
+    }
+
+    function setComintCap(uint256 cap) external {
+        require(hasRole(MINTER_ROLE, msg.sender), "not minter");
+        minterSupply[msg.sender].comintcap = cap;
     }
 }
