@@ -174,8 +174,19 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         uint256 amount,
         address sender,
         address receiver,
-        uint256 /*toChainId*/ // used in anyFallback
+        uint256 toChainId
     ) external onlyCallProxy whenNotPaused(PAUSE_CALLIN_ROLE) {
+        _callin(srcToken, dstToken, amount, sender, receiver, toChainId);
+    }
+
+    function _callin(
+        address srcToken,
+        address dstToken,
+        uint256 amount,
+        address sender,
+        address receiver,
+        uint256 /*toChainId*/ // used in anyFallback
+    ) internal {
         (address from, uint256 fromChainId) = IAnycallProxy(callProxy).context();
         require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
         require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
@@ -215,5 +226,32 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         }
 
         emit LogCalloutFail(srcToken, from, receiver, amount, toChainId);
+    }
+
+    // impl AnyswapV6CallProxy IApp interface
+    function anyExecute(bytes calldata data)
+        external
+        onlyCallProxy
+        whenNotPaused(PAUSE_CALLIN_ROLE)
+        returns (bool success, bytes memory result)
+    {
+        (
+            bytes4 selector,
+            address srcToken,
+            address dstToken,
+            uint256 amount,
+            address sender,
+            address receiver,
+            uint256 toChainId
+        ) = abi.decode(
+            data,
+            (bytes4, address, address, uint256, address, address, uint256)
+        );
+
+        require(selector == AaveV3PoolAnycallClient.callin.selector, "wrong selector");
+
+        _callin(srcToken, dstToken, amount, sender, receiver, toChainId);
+
+        return (true, "");
     }
 }

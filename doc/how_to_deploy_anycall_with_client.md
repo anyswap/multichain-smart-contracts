@@ -8,13 +8,16 @@ related smart contracts
 contracts/
 ├── anycall
 │   ├── AnyswapV5CallProxy.sol
+│   ├── AnyswapV6CallProxy.sol
 │   └── client
 │       └── AaveV3PoolAnycallClient.sol
 └── common
     └── UpgradableProxy.sol
 ```
 
-## 1. delpoy `AnyswapV5CallProxy` same as normal anycall deployment
+## 1. delpoy `AnyswapCallProxy` same as normal anycall deployment
+
+**AnyswapV5CallProxy**
 
 ```text
     constructor(
@@ -27,6 +30,28 @@ contracts/
 
 when `_freeTestMode` is true, the whitelist will be disable and no fee will be payed.
 
+**AnyswapV6CallProxy**
+
+```text
+    constructor(
+        address _admin,
+        address _mpc,
+        uint128 _premium,
+        uint256 _mode
+    )
+```
+
+when `_mode` is flag bits.
+
+```solidity
+    uint256 public constant PERMISSIONLESS_MODE = 0x1;
+    uint256 public constant FREE_MODE = 0x1 << 1;
+```
+
+Notation:  
+the client app should set authorization to allow anyswap callproxy to call into their app.  
+for v5, set authorization to `AnyswapV5CallProxy`  
+for v6, set authorization to `AnyswapV6CallProxy.executor`
 
 ## 2. deploy `AaveV3PoolAnycallClient` as upgradable
 
