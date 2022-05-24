@@ -43,12 +43,13 @@ interface IwNATIVE {
     function transfer(address to, uint256 value) external returns (bool);
 }
 
-interface IAnycallProxy {
-    function exec(
-        address token,
-        address receiver,
-        uint256 amount,
-        bytes calldata data
+interface IAnycallExecutor {
+    function execute(
+        address _anycallProxy,
+        address _token,
+        address _receiver,
+        uint256 _amount,
+        bytes calldata _data
     ) external returns (bool success, bytes memory result);
 }
 
@@ -74,6 +75,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         keccak256("Native_Paused_ROLE");
 
     address public immutable wNATIVE;
+    address public immutable anycallExecutor;
 
     mapping(address => bool) public supportedAnycallProxy;
 
@@ -127,8 +129,11 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address _admin,
         address _mpc,
         address _wNATIVE,
+        address _anycallExecutor,
         address[] memory _anycallProxies
     ) MPCManageable(_mpc) PausableControlWithAdmin(_admin) {
+        require(_anycallExecutor != address(0), "zero anycall executor");
+        anycallExecutor = _anycallExecutor;
         wNATIVE = _wNATIVE;
         for(uint256 i = 0; i < _anycallProxies.length; i++) {
             supportedAnycallProxy[_anycallProxies[i]] = true;
@@ -471,10 +476,10 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         if (useUnderlying) {
             assert(IRouter(token).mint(address(this), amount));
             IUnderlying(token).withdraw(amount, anycallProxy);
-            return IAnycallProxy(anycallProxy).exec(IUnderlying(token).underlying(), receiver, amount, data);
+            return IAnycallExecutor(anycallExecutor).execute(anycallProxy, IUnderlying(token).underlying(), receiver, amount, data);
         }
         assert(IRouter(token).mint(anycallProxy, amount));
-        return IAnycallProxy(anycallProxy).exec(token, receiver, amount, data);
+        return IAnycallExecutor(anycallExecutor).execute(anycallProxy, token, receiver, amount, data);
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID

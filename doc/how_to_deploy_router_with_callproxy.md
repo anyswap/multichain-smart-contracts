@@ -14,6 +14,22 @@ contracts/router/
 Notation: the following steps are not the unique way.
 we can change the orders and setting to complete the same job.
 
+## 0. deploy `AnycallExecutor` in `AnyCallExecutor.sol`
+
+`AnycallExecutor` is the delegator to execute contract calling (like a sandbox) to enfore security.
+
+```
+    constructor(address _mpc)
+
+    function addSupportedCaller(address[] calldata _callers)
+    function removeSupportedCaller(address[] calldata _callers)
+
+    mapping(address => bool) public isAuthCaller;
+```
+
+where the `isAuthCaller` is a map stores the auth callers (eg. the router contract)
+
+
 ## 1. deploy `MultichainV7Router` in `MultichainV7Router.sol`
 
 ```
@@ -21,11 +37,12 @@ we can change the orders and setting to complete the same job.
         address _admin,
         address _mpc,
         address _wNATIVE,
+        address _anycallExecutor,
         address[] memory _anycallProxies
     )
-
-    function addAnycallProxies(address[] memory proxies) external onlyMPC
 ```
+
+`wNATIVE` and `anycallExecutor` is `immutable`, which means they can not be change after deployed.
 
 here we deploy `MultichainV7Router` at the first step,
 we do not know `_anycallProxies`,
