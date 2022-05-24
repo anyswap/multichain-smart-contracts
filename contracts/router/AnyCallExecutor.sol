@@ -2,7 +2,7 @@
 pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "../access/MPCManageable.sol";
+import "../access/MPCAdminsControl.sol";
 
 /// IAnycallProxy interface of the anycall proxy
 interface IAnycallProxy {
@@ -26,7 +26,7 @@ interface IAnycallExecutor {
 }
 
 /// anycall executor is the delegator to execute contract calling (like a sandbox)
-contract AnycallExecutor is IAnycallExecutor, MPCManageable {
+contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
     using EnumerableSet for EnumerableSet.AddressSet;
     EnumerableSet.AddressSet private authCallers;
 
@@ -35,7 +35,7 @@ contract AnycallExecutor is IAnycallExecutor, MPCManageable {
         _;
     }
 
-    constructor(address _mpc) MPCManageable(_mpc) {}
+    constructor(address _mpc) MPCAdminsControl(_mpc) {}
 
     function isAuthCaller(address _caller) external view returns (bool) {
         return authCallers.contains(_caller);
@@ -53,13 +53,13 @@ contract AnycallExecutor is IAnycallExecutor, MPCManageable {
         return authCallers.values();
     }
 
-    function addSupportedCaller(address[] calldata _callers) external onlyMPC {
+    function addSupportedCaller(address[] calldata _callers) external onlyAdmin {
         for(uint256 i = 0; i < _callers.length; i++) {
             authCallers.add(_callers[i]);
         }
     }
 
-    function removeSupportedCaller(address[] calldata _callers) external onlyMPC {
+    function removeSupportedCaller(address[] calldata _callers) external onlyAdmin {
         for(uint256 i = 0; i < _callers.length; i++) {
             authCallers.remove(_callers[i]);
         }
