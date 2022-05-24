@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.6;
 
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../access/MPCManageable.sol";
 
 /// IAnycallProxy interface of the anycall proxy
@@ -26,30 +27,41 @@ interface IAnycallExecutor {
 
 /// anycall executor is the delegator to execute contract calling (like a sandbox)
 contract AnycallExecutor is IAnycallExecutor, MPCManageable {
-    mapping(address => bool) public isAuthCaller;
+    using EnumerableSet for EnumerableSet.AddressSet;
+    EnumerableSet.AddressSet private authCallers;
 
     modifier onlyAuthCaller() {
-        require(isAuthCaller[msg.sender], "only auth");
+        require(authCallers.contains(msg.sender), "only auth");
         _;
     }
 
     constructor(address _mpc) MPCManageable(_mpc) {}
 
+    function isAuthCaller(address _caller) external view returns (bool) {
+        return authCallers.contains(_caller);
+    }
+
+    function getAuthCallersCount() external view returns (uint256) {
+        return authCallers.length();
+    }
+
+    function getAuthCallerAtIndex(uint256 index) external view returns (address) {
+        return authCallers.at(index);
+    }
+
+    function getAllAuthCallers() external view returns (address[] memory) {
+        return authCallers.values();
+    }
+
     function addSupportedCaller(address[] calldata _callers) external onlyMPC {
-        address caller;
         for(uint256 i = 0; i < _callers.length; i++) {
-            caller = _callers[i];
-            require(!isAuthCaller[caller]);
-            isAuthCaller[caller] = true;
+            authCallers.add(_callers[i]);
         }
     }
 
     function removeSupportedCaller(address[] calldata _callers) external onlyMPC {
-        address caller;
         for(uint256 i = 0; i < _callers.length; i++) {
-            caller = _callers[i];
-            require(!isAuthCaller[caller]);
-            isAuthCaller[caller] = false;
+            authCallers.remove(_callers[i]);
         }
     }
 
