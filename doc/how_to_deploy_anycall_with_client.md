@@ -1,6 +1,6 @@
 # How to delpoy anycall with client
 
-the follwing docmuent is explained with example of `anycall + aavev3`
+the follwing docmuent is explained with example of `anycallv5 + aavev3`
 
 related smart contracts
 
@@ -9,7 +9,9 @@ contracts/
 ├── anycall
 │   ├── AnyswapV5CallProxy.sol
 │   ├── AnyswapV6CallProxy.sol
-│   └── client
+│   ├── client-v5
+│   ├── └── AaveV3PoolAnycallClient.sol
+│   └── client-v6
 │       └── AaveV3PoolAnycallClient.sol
 └── common
     └── UpgradableProxy.sol
@@ -100,7 +102,7 @@ set token peers, for `each token` on source blockchain, we need to set its corre
 the `chainIds` and `dstTokens` should have the order, that is the first `chainIds`'s token peer is the first `dstTokens`.
 
 ```text
-    function setMultiTokens(
+    function setTokenPeers(
         address srcToken,
         uint256[] calldata chainIds,
         address[] calldata dstTokens
