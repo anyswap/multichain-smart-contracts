@@ -120,6 +120,11 @@ contract AnyswapTokenAnycallClient is AnycallClientBase, MPCManageable {
         address dstToken = tokenPeers[token][toChainId];
         require(dstToken != address(0), "AnycallClient: no dest token");
 
+        uint256 oldCoinBalance;
+        if (msg.value > 0) {
+            oldCoinBalance = address(this).balance - msg.value;
+        }
+
         address _underlying = _getUnderlying(token);
 
         if (_underlying != address(0)) {
@@ -150,6 +155,15 @@ contract AnyswapTokenAnycallClient is AnycallClientBase, MPCManageable {
             toChainId,
             flags
         );
+
+        if (msg.value > 0) {
+            uint256 newCoinBalance = address(this).balance;
+            if (newCoinBalance > oldCoinBalance) {
+                // return remaining fees
+                (bool success,) = msg.sender.call{value: newCoinBalance - oldCoinBalance}("");
+                require(success);
+            }
+        }
 
         emit LogSwapout(token, msg.sender, receiver, amount, toChainId);
     }
