@@ -2,7 +2,6 @@
 pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../../access/MPCManageable.sol";
 import "../../access/PausableControlWithAdmin.sol";
 
 /// three level architecture
@@ -64,7 +63,7 @@ abstract contract AnycallClientBase is PausableControlWithAdmin {
     function anyFallback(address to, bytes calldata data) external virtual;
 }
 
-contract AnyswapTokenAnycallClient is AnycallClientBase, MPCManageable {
+contract AnyswapTokenAnycallClient is AnycallClientBase {
     using SafeERC20 for IERC20;
 
     // pausable control roles
@@ -90,9 +89,8 @@ contract AnyswapTokenAnycallClient is AnycallClientBase, MPCManageable {
 
     constructor(
         address _admin,
-        address _mpc,
         address _callProxy
-    ) AnycallClientBase(_admin, _callProxy) MPCManageable(_mpc) {
+    ) AnycallClientBase(_admin, _callProxy) {
     }
 
     function setTokenPeers(
