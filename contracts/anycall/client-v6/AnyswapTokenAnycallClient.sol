@@ -15,8 +15,12 @@ interface IAnyswapToken {
     function burn(address from, uint256 amount) external returns (bool);
 }
 
-interface IAnycallV6Proxy {
+interface IAnycallExecutor {
     function context() external returns (address from, uint256 fromChainID, uint256 nonce);
+}
+
+interface IAnycallV6Proxy {
+    function executor() external view returns (address);
 
     function anyCall(
         address _to,
@@ -186,7 +190,8 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             (address, address, uint256, address, address, uint256)
         );
 
-        (address from, uint256 fromChainId,) = IAnycallV6Proxy(callProxy).context();
+        address executor = IAnycallV6Proxy(callProxy).executor();
+        (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
         require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
         require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
 
@@ -209,7 +214,8 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
         onlyCallProxy
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
-        (address _from,,) = IAnycallV6Proxy(callProxy).context();
+        address executor = IAnycallV6Proxy(callProxy).executor();
+        (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
