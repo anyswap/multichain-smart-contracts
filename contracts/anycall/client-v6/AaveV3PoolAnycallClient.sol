@@ -50,6 +50,10 @@ abstract contract AnycallClientBase is PausableControlWithAdmin {
         callProxy = _callProxy;
     }
 
+    receive() external payable {
+        require(msg.sender == callProxy, "AnycallClient: receive from forbidden sender");
+    }
+
     function setCallProxy(address _callProxy) external onlyAdmin {
         require(_callProxy != address(0));
         callProxy = _callProxy;
@@ -148,6 +152,11 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         address dstToken = tokenPeers[token][toChainId];
         require(dstToken != address(0), "AnycallClient: no dest token");
 
+        uint256 oldCoinBalance;
+        if (msg.value > 0) {
+            oldCoinBalance = address(this).balance - msg.value;
+        }
+
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         bytes memory data = abi.encode(
@@ -165,6 +174,15 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             toChainId,
             flags
         );
+
+        if (msg.value > 0) {
+            uint256 newCoinBalance = address(this).balance;
+            if (newCoinBalance > oldCoinBalance) {
+                // return remaining fees
+                (bool success,) = msg.sender.call{value: newCoinBalance - oldCoinBalance}("");
+                require(success);
+            }
+        }
 
         emit LogCallout(token, msg.sender, receiver, amount, toChainId);
     }

@@ -47,6 +47,10 @@ abstract contract AnycallClientBase is PausableControlWithAdmin {
         callProxy = _callProxy;
     }
 
+    receive() external payable {
+        require(msg.sender == callProxy, "AnycallClient: receive from forbidden sender");
+    }
+
     function setCallProxy(address _callProxy) external onlyAdmin {
         require(_callProxy != address(0));
         callProxy = _callProxy;
