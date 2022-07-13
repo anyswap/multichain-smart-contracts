@@ -53,13 +53,13 @@ contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
         return authCallers.values();
     }
 
-    function addSupportedCaller(address[] calldata _callers) external onlyAdmin {
+    function addAuthCallers(address[] calldata _callers) external onlyAdmin {
         for(uint256 i = 0; i < _callers.length; i++) {
             authCallers.add(_callers[i]);
         }
     }
 
-    function removeSupportedCaller(address[] calldata _callers) external onlyAdmin {
+    function removeAuthCallers(address[] calldata _callers) external onlyAdmin {
         for(uint256 i = 0; i < _callers.length; i++) {
             authCallers.remove(_callers[i]);
         }
