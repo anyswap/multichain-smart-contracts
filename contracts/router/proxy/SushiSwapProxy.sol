@@ -3,7 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../../access/MPCManageable.sol";
+import "./AnycallProxyBase.sol";
 
 library SafeMathSushiswap {
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
@@ -166,22 +166,12 @@ library SushiswapV2Library {
     }
 }
 
-interface IAnycallProxy {
-    function exec(
-        address token,
-        address receiver,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bool success, bytes memory result);
-}
-
-contract AnycallProxy_SushiSwap is IAnycallProxy, MPCManageable {
+contract AnycallProxy_SushiSwap is AnycallProxyBase {
     using SafeMathSushiswap for uint256;
     using SafeERC20 for IERC20;
 
     address public immutable sushiFactory;
     address public immutable wNATIVE;
-    mapping(address => bool) public supportedCaller;
 
     event TokenSwap(
         address indexed token,
@@ -194,18 +184,12 @@ contract AnycallProxy_SushiSwap is IAnycallProxy, MPCManageable {
         uint256 amount
     );
 
-    modifier onlyAuth() {
-        require(supportedCaller[msg.sender], "SushiSwapAnycallProxy: only auth");
-        _;
-    }
-
     constructor(
         address mpc_,
         address caller_,
         address sushiV2Factory_,
         address wNATIVE_
-    ) MPCManageable(mpc_) {
-        supportedCaller[caller_] = true;
+    ) AnycallProxyBase(mpc_, caller_) {
         sushiFactory = sushiV2Factory_;
         wNATIVE = wNATIVE_;
     }
@@ -239,14 +223,6 @@ contract AnycallProxy_SushiSwap is IAnycallProxy, MPCManageable {
         returns (AnycallInfo memory)
     {
         return abi.decode(data, (AnycallInfo));
-    }
-
-    function addSupportedCaller(address caller) external onlyMPC {
-        supportedCaller[caller] = true;
-    }
-
-    function removeSupportedCaller(address caller) external onlyMPC {
-        supportedCaller[caller] = false;
     }
 
     function exec(

@@ -3,16 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../../access/MPCManageable.sol";
-
-interface IAnycallProxy {
-    function exec(
-        address token,
-        address receiver,
-        uint256 amount,
-        bytes calldata data
-    ) external returns (bool success, bytes memory result);
-}
+import "./AnycallProxyBase.sol";
 
 interface ICurveAave {
     function coins(uint256 index) external view returns (address);
@@ -22,10 +13,9 @@ interface ICurveAave {
     function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
 }
 
-contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
+contract AnycallProxy_CurveAave is AnycallProxyBase {
     using SafeERC20 for IERC20;
 
-    mapping(address => bool) public supportedCaller;
     mapping(address => bool) public supportedPool;
 
     struct AnycallInfo {
@@ -41,8 +31,7 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
         address _mpc,
         address _caller,
         address[] memory pools
-    ) MPCManageable(_mpc) {
-        supportedCaller[_caller] = true;
+    ) AnycallProxyBase(_mpc, _caller) {
         for (uint256 i = 0; i < pools.length; i++) {
             supportedPool[pools[i]] = true;
         }
@@ -64,14 +53,6 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
         return abi.decode(data, (AnycallInfo));
     }
 
-    function addSupportedCaller(address caller) external onlyMPC {
-        supportedCaller[caller] = true;
-    }
-
-    function removeSupportedCaller(address caller) external onlyMPC {
-        supportedCaller[caller] = false;
-    }
-
     function addSupportedPools(address[] calldata pools) external onlyMPC {
         for (uint256 i = 0; i < pools.length; i++) {
             supportedPool[pools[i]] = true;
@@ -89,9 +70,7 @@ contract AnycallProxy_CurveAave is MPCManageable, IAnycallProxy {
         address receiver,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool success, bytes memory result) {
-        require(supportedCaller[msg.sender], "AnycallProxy: Forbidden");
-
+    ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory t = decode_anycall_info(data);
         require(t.deadline >= block.timestamp, "AnycallProxy: expired");
         require(supportedPool[t.pool], "AnycallProxy: unsupported pool");
