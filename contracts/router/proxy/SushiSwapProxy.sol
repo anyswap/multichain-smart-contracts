@@ -117,7 +117,10 @@ library SushiswapV2Library {
         uint256 reserveIn,
         uint256 reserveOut
     ) internal pure returns (uint256 amountIn) {
-        require(amountOut > 0, "SushiswapV2Library: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(
+            amountOut > 0,
+            "SushiswapV2Library: INSUFFICIENT_OUTPUT_AMOUNT"
+        );
         require(
             reserveIn > 0 && reserveOut > 0,
             "SushiswapV2Library: INSUFFICIENT_LIQUIDITY"
@@ -199,6 +202,7 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         uint256 amountOutMin;
         uint256 amountInMax;
         address[] path;
+        address receiver;
         uint256 deadline;
         bool toNative;
     }
@@ -227,7 +231,6 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
 
     function exec(
         address token,
-        address receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
@@ -263,41 +266,27 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
 
         address recvToken;
         uint256 recvAmount;
-
+        address receiver = anycallInfo.receiver;
         if (anycallInfo.toNative) {
             require(
                 path[path.length - 1] == wNATIVE,
                 "SushiSwapAnycallProxy:INVALID_PATH"
             );
-            (recvToken, recvAmount) = _swap(
-                amounts,
-                path,
-                address(this)
-            );
+            (recvToken, recvAmount) = _swap(amounts, path, address(this));
             IwNATIVE(wNATIVE).withdraw(recvAmount);
             Address.sendValue(payable(receiver), recvAmount);
             recvToken = address(0);
         } else {
-            (recvToken, recvAmount) = _swap(
-                amounts,
-                path,
-                receiver
-            );
+            (recvToken, recvAmount) = _swap(amounts, path, receiver);
         }
         emit TokenSwap(recvToken, receiver, recvAmount);
 
         if (amount.sub(amounts[0]) > 0) {
-            IERC20(path[0]).safeTransfer(
-                receiver,
-                amount.sub(amounts[0])
-            );
+            IERC20(path[0]).safeTransfer(receiver, amount.sub(amounts[0]));
             emit TokenBack(token, receiver, amount.sub(amounts[0]));
         }
 
-        return (
-            true,
-            abi.encode(recvToken, recvAmount)
-        );
+        return (true, abi.encode(recvToken, recvAmount));
     }
 
     function swapTokensForExactTokens(AnycallInfo memory anycallInfo)
@@ -339,14 +328,7 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         uint256[] memory amounts,
         address[] memory path,
         address _to
-    )
-        internal
-        virtual
-        returns (
-            address,
-            uint256
-        )
-    {
+    ) internal virtual returns (address, uint256) {
         for (uint256 i; i < path.length - 1; i++) {
             (address input, address output) = (path[i], path[i + 1]);
             (address token0, ) = SushiswapV2Library.sortTokens(input, output);

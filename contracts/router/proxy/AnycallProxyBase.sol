@@ -7,7 +7,6 @@ import "../../access/MPCManageable.sol";
 interface IAnycallProxy {
     function exec(
         address token,
-        address receiver,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result);
