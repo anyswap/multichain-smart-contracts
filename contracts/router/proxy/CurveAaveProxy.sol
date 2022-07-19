@@ -20,6 +20,7 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
 
     struct AnycallInfo {
         address pool;
+        address receiver;
         bool is_exchange_underlying;
         uint256 deadline;
         int128 i;
@@ -67,13 +68,13 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
 
     function exec(
         address token,
-        address receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory t = decode_anycall_info(data);
         require(t.deadline >= block.timestamp, "AnycallProxy: expired");
         require(supportedPool[t.pool], "AnycallProxy: unsupported pool");
+        require(t.receiver != address(0), "AnycallProxy: zero receiver");
 
         ICurveAave pool = ICurveAave(t.pool);
 
@@ -99,7 +100,7 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
             recvAmount = pool.exchange(t.i, t.j, amount, t.min_dy);
         }
 
-        IERC20(recvToken).safeTransfer(receiver, recvAmount);
+        IERC20(recvToken).safeTransfer(t.receiver, recvAmount);
 
         return (true, abi.encode(recvToken, recvAmount));
     }

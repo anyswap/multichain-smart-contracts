@@ -8,7 +8,6 @@ import "../access/MPCAdminsControl.sol";
 interface IAnycallProxy {
     function exec(
         address _token,
-        address _receiver,
         uint256 _amount,
         bytes calldata _data
     ) external returns (bool success, bytes memory result);
@@ -19,7 +18,6 @@ interface IAnycallExecutor {
     function execute(
         address _anycallProxy,
         address _token,
-        address _receiver,
         uint256 _amount,
         bytes calldata _data
     ) external returns (bool success, bytes memory result);
@@ -68,10 +66,9 @@ contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
     function execute(
         address _anycallProxy,
         address _token,
-        address _receiver,
         uint256 _amount,
         bytes calldata _data
     ) external onlyAuthCaller returns (bool success, bytes memory result) {
-        return IAnycallProxy(_anycallProxy).exec(_token, _receiver, _amount, _data);
+        return IAnycallProxy(_anycallProxy).exec(_token, _amount, _data);
     }
 }

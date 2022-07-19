@@ -31,7 +31,6 @@ interface IAnycallExecutor {
     function execute(
         address _anycallProxy,
         address _token,
-        address _receiver,
         uint256 _amount,
         bytes calldata _data
     ) external returns (bool success, bytes memory result);
@@ -356,24 +355,6 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         emit LogAnySwapIn(swapID, token, to, amount, fromChainID, block.chainid);
     }
 
-    function atomicSwapInAndExec(
-        address token,
-        address receiver,
-        uint256 amount,
-        address anycallProxy,
-        bytes calldata data,
-        bool useUnderlying
-    ) external whenNotPaused(Exec_Paused_ROLE) returns (bool success, bytes memory result) {
-        require(msg.sender == address(this), "forbid atomic call");
-        if (useUnderlying) {
-            assert(IRouter(token).mint(address(this), amount));
-            IUnderlying(token).withdraw(amount, anycallProxy);
-            return IAnycallExecutor(anycallExecutor).execute(anycallProxy, IUnderlying(token).underlying(), receiver, amount, data);
-        }
-        assert(IRouter(token).mint(anycallProxy, amount));
-        return IAnycallExecutor(anycallExecutor).execute(anycallProxy, token, receiver, amount, data);
-    }
-
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(
         string memory swapID,
@@ -383,17 +364,17 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 fromChainID,
         address anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapin_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
+    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
+
+        assert(IRouter(token).mint(receiver, amount));
 
         bool success;
         bytes memory result;
-        try this.atomicSwapInAndExec(token, receiver, amount, anycallProxy, data, false)
+        try IAnycallExecutor(anycallExecutor).execute(anycallProxy, token, amount, data)
         returns (bool succ, bytes memory res) {
             (success, result) = (succ, res);
         } catch {
-            assert(IRouter(token).mint(receiver, amount));
-            success = true;
         }
 
         emit LogAnySwapInAndExec(
@@ -417,25 +398,19 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 fromChainID,
         address anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapin_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
+    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
         require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
+        require(IUnderlying(token).underlying() != address(0), "MultichainRouter: zero underlying");
 
-        address _underlying = IUnderlying(token).underlying();
-        require(_underlying != address(0), "MultichainRouter: zero underlying");
+        assert(IRouter(token).mint(address(this), amount));
+        IUnderlying(token).withdraw(amount, receiver);
 
         bool success;
         bytes memory result;
-        try this.atomicSwapInAndExec(token, receiver, amount, anycallProxy, data, true)
+        try IAnycallExecutor(anycallExecutor).execute(anycallProxy, IUnderlying(token).underlying(), amount, data)
         returns (bool succ, bytes memory res) {
             (success, result) = (succ, res);
         } catch {
-            if (IERC20(_underlying).balanceOf(token) >= amount) {
-                assert(IRouter(token).mint(address(this), amount));
-                IUnderlying(token).withdraw(amount, receiver);
-            } else {
-                assert(IRouter(token).mint(receiver, amount));
-            }
-            success = true;
         }
 
         emit LogAnySwapInAndExec(

@@ -239,6 +239,8 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
             anycallInfo.deadline >= block.timestamp,
             "SushiSwapAnycallProxy: EXPIRED"
         );
+        address receiver = anycallInfo.receiver;
+        require(receiver != address(0), "SushiSwapAnycallProxy: zero receiver");
 
         address[] memory path = anycallInfo.path;
         require(path.length >= 2, "SushiSwapAnycallProxy: invalid path length");
