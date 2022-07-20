@@ -290,7 +290,6 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
 
         address recvToken;
         uint256 recvAmount;
-        address receiver = anycallInfo.receiver;
         if (anycallInfo.toNative) {
             require(
                 path[path.length - 1] == wNATIVE,
