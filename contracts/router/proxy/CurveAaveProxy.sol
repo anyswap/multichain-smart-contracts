@@ -28,6 +28,12 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         uint256 min_dy;
     }
 
+    event ExecFailed(
+        address indexed token,
+        uint256 amount,
+        bytes data
+    );
+
     constructor(
         address _mpc,
         address _caller,
@@ -66,24 +72,41 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         }
     }
 
+    // impl `IAnycallProxy` interface
+    // Note: take care of the situation when do the business failed.
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
-        AnycallInfo memory t = decode_anycall_info(data);
-        require(t.deadline >= block.timestamp, "AnycallProxy: expired");
-        require(supportedPool[t.pool], "AnycallProxy: unsupported pool");
-        require(t.receiver != address(0), "AnycallProxy: zero receiver");
+        AnycallInfo memory info = decode_anycall_info(data);
+        try this.execExchange(token, amount, info) returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch {
+            // process failure situation (eg. return token)
+            IERC20(token).safeTransfer(info.receiver, amount);
+            emit ExecFailed(token, amount, data);
+        }
+    }
 
-        ICurveAave pool = ICurveAave(t.pool);
+    function execExchange(
+        address token,
+        uint256 amount,
+        AnycallInfo calldata info
+    ) external returns (bool success, bytes memory result) {
+        require(msg.sender == address(this));
+        require(info.deadline >= block.timestamp, "AnycallProxy: expired");
+        require(supportedPool[info.pool], "AnycallProxy: unsupported pool");
+        require(info.receiver != address(0), "AnycallProxy: zero receiver");
 
-        uint256 i = uint256(uint128(t.i));
-        uint256 j = uint256(uint128(t.j));
+        ICurveAave pool = ICurveAave(info.pool);
+
+        uint256 i = uint256(uint128(info.i));
+        uint256 j = uint256(uint128(info.j));
 
         address srcToken;
         address recvToken;
-        if (t.is_exchange_underlying) {
+        if (info.is_exchange_underlying) {
             srcToken = pool.underlying_coins(i);
             recvToken = pool.underlying_coins(j);
         } else {
@@ -94,13 +117,13 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         require(recvToken != address(0), "AnycallProxy: zero receive token");
 
         uint256 recvAmount;
-        if (t.is_exchange_underlying) {
-            recvAmount = pool.exchange_underlying(t.i, t.j, amount, t.min_dy);
+        if (info.is_exchange_underlying) {
+            recvAmount = pool.exchange_underlying(info.i, info.j, amount, info.min_dy);
         } else {
-            recvAmount = pool.exchange(t.i, t.j, amount, t.min_dy);
+            recvAmount = pool.exchange(info.i, info.j, amount, info.min_dy);
         }
 
-        IERC20(recvToken).safeTransfer(t.receiver, recvAmount);
+        IERC20(recvToken).safeTransfer(info.receiver, recvAmount);
 
         return (true, abi.encode(recvToken, recvAmount));
     }

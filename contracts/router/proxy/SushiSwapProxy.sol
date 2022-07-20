@@ -186,6 +186,11 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         address indexed receiver,
         uint256 amount
     );
+    event ExecFailed(
+        address indexed token,
+        uint256 amount,
+        bytes data
+    );
 
     constructor(
         address mpc_,
@@ -229,12 +234,29 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         return abi.decode(data, (AnycallInfo));
     }
 
+    // impl `IAnycallProxy` interface
+    // Note: take care of the situation when do the business failed.
     function exec(
         address token,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
+        try this.execSwap(token, amount, anycallInfo) returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch {
+            // process failure situation (eg. return token)
+            IERC20(token).safeTransfer(anycallInfo.receiver, amount);
+            emit ExecFailed(token, amount, data);
+        }
+    }
+
+    function execSwap(
+        address token,
+        uint256 amount,
+        AnycallInfo calldata anycallInfo
+    ) external returns (bool success, bytes memory result) {
+        require(msg.sender == address(this));
         require(
             anycallInfo.deadline >= block.timestamp,
             "SushiSwapAnycallProxy: EXPIRED"
