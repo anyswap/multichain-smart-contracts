@@ -54,7 +54,13 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
     address public immutable wNATIVE;
     address public immutable anycallExecutor;
 
-    mapping(address => bool) public supportedAnycallProxy;
+    struct ProxyInfo {
+        bool supported;
+        bool acceptAnyToken;
+    }
+
+    mapping(address => ProxyInfo) public anycallProxyInfo;
+    mapping(bytes32 => bool) public retryRecords;
     mapping(string => bool) public completedSwapin;
 
     modifier checkCompletion(string memory swapID) {
@@ -100,34 +106,43 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         bytes data
     );
 
+    event LogRetryExecRecord(
+        string swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        address anycallProxy,
+        bytes data
+    );
+
+
     constructor(
         address _admin,
         address _mpc,
         address _wNATIVE,
-        address _anycallExecutor,
-        address[] memory _anycallProxies
+        address _anycallExecutor
     ) MPCManageable(_mpc) PausableControlWithAdmin(_admin) {
         require(_anycallExecutor != address(0), "zero anycall executor");
         anycallExecutor = _anycallExecutor;
         wNATIVE = _wNATIVE;
-        for(uint256 i = 0; i < _anycallProxies.length; i++) {
-            supportedAnycallProxy[_anycallProxies[i]] = true;
-        }
     }
 
     receive() external payable {
         assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
     }
 
-    function addAnycallProxies(address[] memory proxies) external onlyMPC {
-        for(uint256 i = 0; i < proxies.length; i++) {
-            supportedAnycallProxy[proxies[i]] = true;
+    function addAnycallProxies(address[] memory proxies, bool[] memory acceptAnyTokenFlags) external onlyMPC {
+        uint256 length = proxies.length;
+        require(length == acceptAnyTokenFlags.length, "length mismatch");
+        for(uint256 i = 0; i < length; i++) {
+            anycallProxyInfo[proxies[i]] = ProxyInfo(true, acceptAnyTokenFlags[i]);
         }
     }
 
     function removeAnycallProxies(address[] memory proxies) external onlyMPC {
         for(uint256 i = 0; i < proxies.length; i++) {
-            supportedAnycallProxy[proxies[i]] = false;
+            delete anycallProxyInfo[proxies[i]];
         }
     }
 
@@ -365,7 +380,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address anycallProxy,
         bytes calldata data
     ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
-        require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
+        require(anycallProxyInfo[anycallProxy].supported, "unsupported ancall proxy");
 
         assert(IRouter(token).mint(receiver, amount));
 
@@ -389,6 +404,63 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         );
     }
 
+    function _anySwapInUnderlyingAndExec(
+        string memory swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        address anycallProxy,
+        bytes calldata data,
+        bool isRetry
+    ) internal whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) nonReentrant {
+        require(anycallProxyInfo[anycallProxy].supported, "unsupported ancall proxy");
+
+        address receiveToken;
+
+        { // fix Stack too deep
+            address _underlying = IUnderlying(token).underlying();
+            require(_underlying != address(0), "MultichainRouter: zero underlying");
+
+            if (IERC20(_underlying).balanceOf(token) >= amount) {
+                receiveToken = _underlying;
+                assert(IRouter(token).mint(address(this), amount));
+                IUnderlying(token).withdraw(amount, receiver);
+            } else if (anycallProxyInfo[anycallProxy].acceptAnyToken) {
+                receiveToken = token;
+                assert(IRouter(token).mint(receiver, amount));
+            } else {
+                require(!isRetry, "MultichainRouter: retry failed");
+                bytes32 retryHash = keccak256(abi.encode(swapID, token, receiver, amount, fromChainID, anycallProxy, data));
+                retryRecords[retryHash] = true;
+                emit LogRetryExecRecord(swapID, token, receiver, amount, fromChainID, anycallProxy, data);
+                return;
+            }
+        }
+
+        bool success;
+        bytes memory result;
+        try IAnycallExecutor(anycallExecutor).execute(anycallProxy, receiveToken, amount, data)
+        returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch {
+        }
+
+        { // fix Stack too deep
+            string memory _swapID = swapID;
+            emit LogAnySwapInAndExec(
+                _swapID,
+                token,
+                receiver,
+                amount,
+                fromChainID,
+                block.chainid,
+                success,
+                result
+            );
+        }
+    }
+
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
     function anySwapInUnderlyingAndExec(
         string memory swapID,
@@ -398,31 +470,24 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 fromChainID,
         address anycallProxy,
         bytes calldata data
-    ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
-        require(supportedAnycallProxy[anycallProxy], "unsupported ancall proxy");
-        require(IUnderlying(token).underlying() != address(0), "MultichainRouter: zero underlying");
+    ) external checkCompletion(swapID) onlyMPC {
+        _anySwapInUnderlyingAndExec(swapID, token, receiver, amount, fromChainID, anycallProxy, data, false);
+    }
 
-        assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, receiver);
+    function retrySwapinAndExec(
+        string memory swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        address anycallProxy,
+        bytes calldata data
+    ) external {
+        bytes32 retryHash = keccak256(abi.encode(swapID, token, receiver, amount, fromChainID, anycallProxy, data));
+        require(retryRecords[retryHash], "retry record not exist");
+        retryRecords[retryHash] = false;
 
-        bool success;
-        bytes memory result;
-        try IAnycallExecutor(anycallExecutor).execute(anycallProxy, IUnderlying(token).underlying(), amount, data)
-        returns (bool succ, bytes memory res) {
-            (success, result) = (succ, res);
-        } catch {
-        }
-
-        emit LogAnySwapInAndExec(
-            swapID,
-            token,
-            receiver,
-            amount,
-            fromChainID,
-            block.chainid,
-            success,
-            result
-        );
+        _anySwapInUnderlyingAndExec(swapID, token, receiver, amount, fromChainID, anycallProxy, data, true);
     }
 
     // extracts mpc fee from bridge fees

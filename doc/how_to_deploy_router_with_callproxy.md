@@ -37,17 +37,11 @@ where the `isAuthCaller` is a map stores the auth callers (eg. the router contra
         address _admin,
         address _mpc,
         address _wNATIVE,
-        address _anycallExecutor,
-        address[] memory _anycallProxies
+        address _anycallExecutor
     )
 ```
 
 `wNATIVE` and `anycallExecutor` is `immutable`, which means they can not be change after deployed.
-
-here we deploy `MultichainV7Router` at the first step,
-we do not know `_anycallProxies`,
-so we set it to zero array here,
-and we should set them in the 3rd step.
 
 
 ## 2. deploy `AnycallProxy_SushiSwap` in `SushiSwapProxy.sol`
@@ -70,7 +64,7 @@ with `caller_` be the `MultichainV7Router` contract deployed in the 1st step.
 setting the call proxies which are allowed to be called in router
 
 ```
-    function addAnycallProxies(address[] memory proxies) external onlyMPC
+    function addAnycallProxies(address[] memory proxies, bool[] memory acceptAnyTokenFlags) external onlyMPC
 ```
 
 where `proxies` includes the `AnycallProxy` contract deployed in step 2
