@@ -302,6 +302,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
+        completedSwapin[swapID] = true;
         assert(IRouter(token).mint(to, amount));
         emit LogAnySwapIn(swapID, token, to, amount, fromChainID, block.chainid);
     }
@@ -318,6 +319,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
             IUnderlying(token).underlying() != address(0),
             "MultichainRouter: zero underlying"
         );
+        completedSwapin[swapID] = true;
         assert(IRouter(token).mint(address(this), amount));
         IUnderlying(token).withdraw(amount, to);
         emit LogAnySwapIn(swapID, token, to, amount, fromChainID, block.chainid);
@@ -336,6 +338,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
             IUnderlying(token).underlying() == wNATIVE,
             "MultichainRouter: underlying is not wNATIVE"
         );
+        completedSwapin[swapID] = true;
         assert(IRouter(token).mint(address(this), amount));
         IUnderlying(token).withdraw(amount, address(this));
         IwNATIVE(wNATIVE).withdraw(amount);
@@ -351,6 +354,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         uint256 amount,
         uint256 fromChainID
     ) external whenNotPaused(Swapin_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
+        completedSwapin[swapID] = true;
         address _underlying = IUnderlying(token).underlying();
         if (
             _underlying != address(0) &&
@@ -381,6 +385,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         bytes calldata data
     ) external whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) checkCompletion(swapID) nonReentrant onlyMPC {
         require(anycallProxyInfo[anycallProxy].supported, "unsupported ancall proxy");
+        completedSwapin[swapID] = true;
 
         assert(IRouter(token).mint(receiver, amount));
 
@@ -415,6 +420,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         bool isRetry
     ) internal whenNotPaused(Swapin_Paused_ROLE) whenNotPaused(Exec_Paused_ROLE) nonReentrant {
         require(anycallProxyInfo[anycallProxy].supported, "unsupported ancall proxy");
+        completedSwapin[swapID] = true;
 
         address receiveToken;
 
