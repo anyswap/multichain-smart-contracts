@@ -497,6 +497,7 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
         address anycallProxy,
         bytes calldata data
     ) external {
+        require(completedSwapin[swapID], "swap not completed");
         bytes32 retryHash = keccak256(abi.encode(swapID, token, receiver, amount, fromChainID, anycallProxy, data));
         require(retryRecords[retryHash], "retry record not exist");
         retryRecords[retryHash] = false;
