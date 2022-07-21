@@ -21,6 +21,10 @@ interface IUnderlying {
     function withdraw(uint256 amount, address to) external returns (uint256);
 }
 
+interface IAnyswapERC20Auth {
+    function changeVault(address newVault) external returns (bool);
+}
+
 interface IwNATIVE {
     function deposit() external payable;
 
@@ -130,6 +134,10 @@ contract MultichainV7Router is MPCManageable, PausableControlWithAdmin, Reentran
 
     receive() external payable {
         assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
+    }
+
+    function changeVault(address token, address newVault) external onlyMPC returns (bool) {
+        return IAnyswapERC20Auth(token).changeVault(newVault);
     }
 
     function addAnycallProxies(address[] memory proxies, bool[] memory acceptAnyTokenFlags) external onlyMPC {
