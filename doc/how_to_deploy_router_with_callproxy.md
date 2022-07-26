@@ -18,7 +18,7 @@ we can change the orders and setting to complete the same job.
 
 `AnycallExecutor` is the delegator to execute contract calling (like a sandbox) to enfore security.
 
-```
+```solidity
     constructor(address _mpc)
 
     function addAuthCallers(address[] calldata _callers) external
@@ -29,7 +29,7 @@ we can change the orders and setting to complete the same job.
 
 ## 1. deploy `MultichainV7Router` in `MultichainV7Router.sol`
 
-```
+```solidity
     constructor(
         address _admin,
         address _mpc,
@@ -49,7 +49,7 @@ and we should add the deployed `MultichainV7Router` contract to auth callers of 
 
 deploy `AnycallProxy_SushiSwap`
 
-```
+```solidity
     constructor(
         address mpc_,
         address caller_,
@@ -64,11 +64,105 @@ with `caller_` be the `AnycallExecutor` contract deployed at step 0.
 
 setting the call proxies which are allowed to be called in router
 
-```
+```solidity
     function addAnycallProxies(address[] memory proxies, bool[] memory acceptAnyTokenFlags) external onlyMPC
 ```
 
 where `proxies` includes the `AnycallProxy` contract deployed in step 2
 
 and `acceptAnyTokenFlags` is flags tell us whether that `AnycallProxy` accept receiving `anyERC20Token`.
-If the flag is false and when the liquidity pool is not enough, then the router contract will record this swap and finish it. later anyone can retry the record to complete the swap when the liquidity pool is enough.
+
+If the flag is `false` and when the liquidity pool is not enough, then the router contract will record this swap and finish it. later anyone can retry the record to complete the swap when the liquidity pool is enough.
+
+## 4. the exectuion steps
+
+### 4.1 the user call a corresponding `swapout and call` method
+
+1. token has no underlying
+
+    ```solidity
+        function anySwapOutAndCall(
+            address token,
+            string memory to,
+            uint256 amount,
+            uint256 toChainID,
+            string memory anycallProxy,
+            bytes calldata data
+        )
+    ```
+
+2. token has normal underlying
+
+    ```solidity
+        function anySwapOutUnderlyingAndCall(
+            address token,
+            string memory to,
+            uint256 amount,
+            uint256 toChainID,
+            string memory anycallProxy,
+            bytes calldata data
+        )
+    ```
+
+3. token has special underlying of wNative
+
+    ```solidity
+        function anySwapOutNativeAndCall(
+            address token,
+            string memory to,
+            uint256 toChainID,
+            string memory anycallProxy,
+            bytes calldata data
+        )
+    ```
+
+where,
+
+> `address token` is the anytoken contract address on the `source` chain
+>
+> `string to` is the receive address on the `destination` chain
+>
+> `uint256 amount` is the value transfered on the `source` chain
+>
+> `uint256 toChainID` is the `destination` blockchain id to router into
+>
+> `string anycallProxy` is the call proxy contract on the > `destination` chain to call into
+>
+> `bytes data` is the call data of calling the call proxy contract
+
+Note:
+> generally the `string to` is same as `string anycallProxy`.
+>
+> they can be different either, for example to implement the following user case:
+>
+> transfer token to `string to` address, and then call `string anycallProxy`, this case `string to` address acts like a separate vault address.
+
+### 4.2 the mpc call a corresponding `swapin and exec` method
+
+1. token has no underlying
+
+    ```solidity
+        function anySwapInAndExec(
+            string memory swapID,
+            address token,
+            address receiver,
+            uint256 amount,
+            uint256 fromChainID,
+            address anycallProxy,
+            bytes calldata data
+        )
+    ```
+
+2. token has underlying
+
+    ```solidity
+        function anySwapInUnderlyingAndExec(
+            string memory swapID,
+            address token,
+            address receiver,
+            uint256 amount,
+            uint256 fromChainID,
+            address anycallProxy,
+            bytes calldata data
+        )
+    ```
