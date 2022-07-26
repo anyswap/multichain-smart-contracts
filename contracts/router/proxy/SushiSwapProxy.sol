@@ -186,11 +186,7 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         address indexed receiver,
         uint256 amount
     );
-    event ExecFailed(
-        address indexed token,
-        uint256 amount,
-        bytes data
-    );
+    event ExecFailed(address indexed token, uint256 amount, bytes data);
 
     constructor(
         address mpc_,
@@ -242,7 +238,10 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
-        try this.execSwap(token, amount, anycallInfo) returns (bool succ, bytes memory res) {
+        try this.execSwap(token, amount, anycallInfo) returns (
+            bool succ,
+            bytes memory res
+        ) {
             (success, result) = (succ, res);
         } catch {
             // process failure situation (eg. return token)
@@ -276,11 +275,15 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
             "SushiSwapAnycallProxy:EXCESSIVE_INPUT_AMOUNT"
         );
 
+        uint256 amountInMax = anycallInfo.amountInMax == 0
+            ? amount
+            : anycallInfo.amountInMax;
+
         uint256[] memory amounts;
         if (anycallInfo.amountOut == 0) {
-            amounts = swapExactTokensForTokens(anycallInfo);
+            amounts = swapExactTokensForTokens(anycallInfo, amountInMax);
         } else {
-            amounts = swapTokensForExactTokens(anycallInfo);
+            amounts = swapTokensForExactTokens(anycallInfo, amountInMax);
         }
 
         IERC20(path[0]).safeTransfer(
@@ -312,30 +315,28 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         return (true, abi.encode(recvToken, recvAmount));
     }
 
-    function swapTokensForExactTokens(AnycallInfo memory anycallInfo)
-        internal
-        view
-        returns (uint256[] memory amounts)
-    {
+    function swapTokensForExactTokens(
+        AnycallInfo memory anycallInfo,
+        uint256 amountInMax
+    ) internal view returns (uint256[] memory amounts) {
         amounts = SushiswapV2Library.getAmountsIn(
             sushiFactory,
             anycallInfo.amountOut,
             anycallInfo.path
         );
         require(
-            amounts[0] <= anycallInfo.amountInMax,
+            amounts[0] <= amountInMax,
             "SushiSwapAnycallProxy: EXCESSIVE_INPUT_AMOUNT"
         );
     }
 
-    function swapExactTokensForTokens(AnycallInfo memory anycallInfo)
-        internal
-        view
-        returns (uint256[] memory amounts)
-    {
+    function swapExactTokensForTokens(
+        AnycallInfo memory anycallInfo,
+        uint256 amountInMax
+    ) internal view returns (uint256[] memory amounts) {
         amounts = SushiswapV2Library.getAmountsOut(
             sushiFactory,
-            anycallInfo.amountInMax,
+            amountInMax,
             anycallInfo.path
         );
 
