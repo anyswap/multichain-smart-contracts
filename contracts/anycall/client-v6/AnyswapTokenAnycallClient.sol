@@ -227,6 +227,7 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
         require(msg.sender == address(this), "AnycallClient: forbidden");
+        require(bytes4(data[:4]) == this.anyExecute.selector, "AnycallClient: wrong fallback data");
 
         address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
@@ -240,7 +241,7 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data,
+            data[4:],
             (address, address, uint256, address, address, uint256)
         );
 

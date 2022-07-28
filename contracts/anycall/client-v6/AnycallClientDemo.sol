@@ -71,8 +71,8 @@ contract AaveV3PoolAnycallClient is AnycallClientBase {
     }
 
     /// @dev Call by the user to submit a request for a cross chain interaction
-    /// flags is 0 means pay fee on source chain
-    /// flags is 2 means pay fee on destination chain
+    /// flags is 0 means pay fee on destination chain
+    /// flags is 2 means pay fee on source chain
     function callout(
         string calldata message,
         address receiver,
@@ -150,6 +150,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase {
 
     function anyFallback(address to, bytes calldata data) external {
         require(msg.sender == address(this), "AnycallClient: forbidden");
+        require(bytes4(data[:4]) == this.anyExecute.selector, "AnycallClient: wrong fallback data");
 
         address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
@@ -161,7 +162,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data,
+            data[4:],
             (string, address, address, uint256)
         );
 
