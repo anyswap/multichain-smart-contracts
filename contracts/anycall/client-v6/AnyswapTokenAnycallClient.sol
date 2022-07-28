@@ -146,7 +146,8 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             assert(IAnyswapToken(token).burn(msg.sender, amount));
         }
 
-        bytes memory data = abi.encode(
+        bytes memory data = abi.encodeWithSelector(
+            this.anyExecute.selector,
             token,
             dstToken,
             amount,
@@ -182,32 +183,40 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
         whenNotPaused(PAUSE_SWAPIN_ROLE)
         returns (bool success, bytes memory result)
     {
-        (
-            address srcToken,
-            address dstToken,
-            uint256 amount,
-            address sender,
-            address receiver,
-            //uint256 toChainId
-        ) = abi.decode(
-            data,
-            (address, address, uint256, address, address, uint256)
-        );
+        bytes4 selector = bytes4(data[:4]);
+        if (selector == this.anyExecute.selector) {
+            (
+                address srcToken,
+                address dstToken,
+                uint256 amount,
+                address sender,
+                address receiver,
+                //uint256 toChainId
+            ) = abi.decode(
+                data[4:],
+                (address, address, uint256, address, address, uint256)
+            );
 
-        address executor = IAnycallV6Proxy(callProxy).executor();
-        (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
-        require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
-        require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
+            address executor = IAnycallV6Proxy(callProxy).executor();
+            (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
+            require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
+            require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
 
-        address _underlying = _getUnderlying(dstToken);
+            address _underlying = _getUnderlying(dstToken);
 
-        if (_underlying != address(0) && (IERC20(dstToken).balanceOf(address(this)) >= amount)) {
-            IERC20(dstToken).safeTransferFrom(address(this), receiver, amount);
+            if (_underlying != address(0) && (IERC20(dstToken).balanceOf(address(this)) >= amount)) {
+                IERC20(dstToken).safeTransferFrom(address(this), receiver, amount);
+            } else {
+                assert(IAnyswapToken(dstToken).mint(receiver, amount));
+            }
+
+            emit LogSwapin(dstToken, sender, receiver, amount, fromChainId);
+        } else if (selector == this.anyFallback.selector) {
+            (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
+            this.anyFallback(_to, _data);
         } else {
-            assert(IAnyswapToken(dstToken).mint(receiver, amount));
+            return (false, "unknown selector");
         }
-
-        emit LogSwapin(dstToken, sender, receiver, amount, fromChainId);
         return (true, "");
     }
 
@@ -215,9 +224,10 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
     function anyFallback(address to, bytes calldata data)
         external
         override
-        onlyCallProxy
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
+        require(msg.sender == address(this), "AnycallClient: forbidden");
+
         address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
@@ -230,7 +240,7 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data[4:],
+            data,
             (address, address, uint256, address, address, uint256)
         );
 
