@@ -59,7 +59,7 @@ abstract contract AnycallClientBase is IApp, AdminControl {
     }
 }
 
-contract AaveV3PoolAnycallClient is AnycallClientBase {
+contract AnycallClientDemo is AnycallClientBase {
     event LogCallin(string message, address sender, address receiver, uint256 fromChainId);
     event LogCallout(string message, address sender, address receiver, uint256 toChainId);
     event LogCalloutFail(string message, address sender, address receiver, uint256 toChainId);
@@ -137,6 +137,9 @@ contract AaveV3PoolAnycallClient is AnycallClientBase {
             address executor = IAnycallV6Proxy(callProxy).executor();
             (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
             require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
+
+            // Testing: add a condition of execute failure situation here to test fallbak function
+            require(bytes(message).length < 10, "AnycallClient: message too long");
 
             emit LogCallin(message, sender, receiver, fromChainId);
         } else if (selector == this.anyFallback.selector) {
