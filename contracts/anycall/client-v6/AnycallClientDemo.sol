@@ -142,33 +142,32 @@ contract AnycallClientDemo is AnycallClientBase {
             require(bytes(message).length < 10, "AnycallClient: message too long");
 
             emit LogCallin(message, sender, receiver, fromChainId);
-        } else if (selector == this.anyFallback.selector) {
+        } else if (selector == 0xa35fe8bf) { // bytes4(keccak256('anyFallback(address,bytes)'))
             (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
-            this.anyFallback(_to, _data);
+            anyFallback(_to, _data);
         } else {
             return (false, "unknown selector");
         }
         return (true, "");
     }
 
-    function anyFallback(address to, bytes calldata data) external {
-        require(msg.sender == address(this), "AnycallClient: forbidden");
-        require(bytes4(data[:4]) == this.anyExecute.selector, "AnycallClient: wrong fallback data");
-
+    function anyFallback(address to, bytes memory data) internal {
         address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
+            bytes4 selector,
             string memory message,
             address sender,
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data[4:],
-            (string, address, address, uint256)
+            data,
+            (bytes4, string, address, address, uint256)
         );
 
+        require(selector == this.anyExecute.selector, "AnycallClient: wrong fallback data");
         require(clientPeers[toChainId] == to, "AnycallClient: mismatch dest client");
 
         emit LogCalloutFail(message, sender, receiver, toChainId);
