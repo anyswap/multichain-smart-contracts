@@ -20,6 +20,10 @@ interface IAaveV3Pool {
     ) external;
 }
 
+interface IApp {
+    function anyExecute(bytes calldata _data) external returns (bool success, bytes memory result);
+}
+
 interface IAnycallExecutor {
     function context() external returns (address from, uint256 fromChainID, uint256 nonce);
 }
@@ -36,7 +40,7 @@ interface IAnycallV6Proxy {
     ) external payable;
 }
 
-abstract contract AnycallClientBase is PausableControlWithAdmin {
+abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
     address public callProxy;
     mapping(uint256 => address) public clientPeers; // key is chainId
 
@@ -68,10 +72,6 @@ abstract contract AnycallClientBase is PausableControlWithAdmin {
             clientPeers[_chainIds[i]] = _peers[i];
         }
     }
-
-    function anyExecute(bytes calldata data) external virtual returns (bool success, bytes memory result);
-
-    function anyFallback(address to, bytes calldata data) external virtual;
 }
 
 contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
@@ -221,28 +221,25 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             }
 
             emit LogCallin(dstToken, sender, receiver, amount, fromChainId);
-        } else if (selector == this.anyFallback.selector) {
+        } else if (selector == 0xa35fe8bf) { // bytes4(keccak256('anyFallback(address,bytes)'))
             (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
-            this.anyFallback(_to, _data);
+            anyFallback(_to, _data);
         } else {
             return (false, "unknown selector");
         }
         return (true, "");
     }
 
-    function anyFallback(address to, bytes calldata data)
-        external
-        override
+    function anyFallback(address to, bytes memory data)
+        internal
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
-        require(msg.sender == address(this), "AnycallClient: forbidden");
-        require(bytes4(data[:4]) == this.anyExecute.selector, "AnycallClient: wrong fallback data");
-
         address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
+            bytes4 selector,
             address srcToken,
             address dstToken,
             uint256 amount,
@@ -250,10 +247,11 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data[4:],
-            (address, address, uint256, address, address, uint256)
+            data,
+            (bytes4, address, address, uint256, address, address, uint256)
         );
 
+        require(selector == this.anyExecute.selector, "AnycallClient: wrong fallback data");
         require(clientPeers[toChainId] == to, "AnycallClient: mismatch dest client");
         require(tokenPeers[srcToken][toChainId] == dstToken, "AnycallClient: mismatch dest token");
 
