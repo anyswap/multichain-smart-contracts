@@ -37,18 +37,20 @@ interface IAnycallV6Proxy {
 
 abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
     address public callProxy;
+    address public executor;
 
     // associated client app on each chain
     mapping(uint256 => address) public clientPeers; // key is chainId
 
-    modifier onlyCallProxy() {
-        require(msg.sender == callProxy, "AnycallClient: not authorized");
+    modifier onlyExecutor() {
+        require(msg.sender == executor, "AnycallClient: onlyExecutor");
         _;
     }
 
     constructor(address _admin, address _callProxy) PausableControlWithAdmin(_admin) {
         require(_callProxy != address(0));
         callProxy = _callProxy;
+        executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     receive() external payable {
@@ -58,6 +60,7 @@ abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
     function setCallProxy(address _callProxy) external onlyAdmin {
         require(_callProxy != address(0));
         callProxy = _callProxy;
+        executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     function setClientPeers(
@@ -179,7 +182,7 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
     function anyExecute(bytes calldata data)
         external
         override
-        onlyCallProxy
+        onlyExecutor
         whenNotPaused(PAUSE_SWAPIN_ROLE)
         returns (bool success, bytes memory result)
     {
@@ -197,7 +200,6 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
                 (address, address, uint256, address, address, uint256)
             );
 
-            address executor = IAnycallV6Proxy(callProxy).executor();
             (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
             require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
             require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
@@ -225,7 +227,6 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
         internal
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
-        address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 

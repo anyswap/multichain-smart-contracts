@@ -25,18 +25,20 @@ interface IAnycallV6Proxy {
 
 abstract contract AnycallClientBase is IApp, AdminControl {
     address public callProxy;
+    address public executor;
 
     // associated client app on each chain
     mapping(uint256 => address) public clientPeers; // key is chainId
 
-    modifier onlyCallProxy() {
-        require(msg.sender == callProxy, "AnycallClient: not authorized");
+    modifier onlyExecutor() {
+        require(msg.sender == executor, "AnycallClient: onlyExecutor");
         _;
     }
 
     constructor(address _admin, address _callProxy) AdminControl(_admin) {
         require(_callProxy != address(0));
         callProxy = _callProxy;
+        executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     receive() external payable {
@@ -46,6 +48,7 @@ abstract contract AnycallClientBase is IApp, AdminControl {
     function setCallProxy(address _callProxy) external onlyAdmin {
         require(_callProxy != address(0));
         callProxy = _callProxy;
+        executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     function setClientPeers(
@@ -119,7 +122,7 @@ contract AnycallClientDemo is AnycallClientBase {
     function anyExecute(bytes calldata data)
         external
         override
-        onlyCallProxy
+        onlyExecutor
         returns (bool success, bytes memory result)
     {
         bytes4 selector = bytes4(data[:4]);
@@ -134,7 +137,6 @@ contract AnycallClientDemo is AnycallClientBase {
                 (string, address, address, uint256)
             );
 
-            address executor = IAnycallV6Proxy(callProxy).executor();
             (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
             require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
 
@@ -152,7 +154,6 @@ contract AnycallClientDemo is AnycallClientBase {
     }
 
     function anyFallback(address to, bytes memory data) internal {
-        address executor = IAnycallV6Proxy(callProxy).executor();
         (address _from,,) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
