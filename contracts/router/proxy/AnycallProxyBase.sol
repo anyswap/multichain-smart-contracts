@@ -12,6 +12,19 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
+interface IRetrySwapinAndExec {
+    function retrySwapinAndExec(
+        string memory swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        address anycallProxy,
+        bytes calldata data,
+        bool dontExec
+    ) external;
+}
+
 abstract contract AnycallProxyBase is MPCManageable, IAnycallProxy {
     mapping(address => bool) public supportedCaller;
 

@@ -346,6 +346,34 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         );
     }
 
+    function retrySwapinAndExec(
+        address router,
+        string memory swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        bytes calldata data,
+        bool dontExec
+    ) external {
+        AnycallInfo memory anycallInfo = decode_anycall_info(data);
+        require(msg.sender == anycallInfo.receiver, "forbid call retry");
+        IRetrySwapinAndExec(router).retrySwapinAndExec(
+            swapID,
+            token,
+            receiver,
+            amount,
+            fromChainID,
+            address(this),
+            data,
+            dontExec
+        );
+        if (!dontExec) {
+            // process don't exec situation (eg. return token)
+            IERC20(token).safeTransfer(anycallInfo.receiver, amount);
+        }
+    }
+
     // **** SWAP ****
     // requires the initial amount to have already been sent to the first pair
     function _swap(
