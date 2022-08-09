@@ -25,6 +25,10 @@ interface IRetrySwapinAndExec {
     ) external;
 }
 
+interface IUnderlying {
+    function underlying() external view returns (address);
+}
+
 abstract contract AnycallProxyBase is MPCManageable, IAnycallProxy {
     mapping(address => bool) public supportedCaller;
 

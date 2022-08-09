@@ -150,9 +150,9 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
             data,
             dontExec
         );
-        if (!dontExec) {
+        if (dontExec) {
             // process don't exec situation (eg. return token)
-            IERC20(token).safeTransfer(info.receiver, amount);
+            IERC20(IUnderlying(token).underlying()).safeTransfer(info.receiver, amount);
         }
     }
 }

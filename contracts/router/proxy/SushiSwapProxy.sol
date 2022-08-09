@@ -368,9 +368,9 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
             data,
             dontExec
         );
-        if (!dontExec) {
+        if (dontExec) {
             // process don't exec situation (eg. return token)
-            IERC20(token).safeTransfer(anycallInfo.receiver, amount);
+            IERC20(IUnderlying(token).underlying()).safeTransfer(anycallInfo.receiver, amount);
         }
     }
 
