@@ -67,6 +67,19 @@ interface IRouter {
     function burn(address from, uint256 amount) external returns (bool);
 }
 
+// TokenType token type enumerations
+// When in `need approve` situations, the user should approve to this wrapper contract,
+// not to the Router contract, and not to the target token to be wrapped.
+// If not, this wrapper will fail its function.
+enum TokenType {
+    MintBurnAny,  // mint and burn(address from, uint256 amount), don't need approve
+    MintBurnFrom, // mint and burnFrom(address from, uint256 amount), need approve
+    MintBurnSelf, // mint and burn(uint256 amount), call transferFrom first, need approve
+    Transfer,     // transfer and transferFrom, need approve
+    TransferDeposit, // transfer and transferFrom, deposit and withdraw, need approve, block when lack of liquidity
+    TransferDeposit2 // transfer and transferFrom, deposit and withdraw, need approve, don't block when lack of liquidity
+}
+
 /// @dev MintBurnWrapper has the following aims:
 /// 1. wrap token which does not support interface `IBridge` or `IRouter`
 /// 2. wrap token which want to support multiple minters
@@ -97,14 +110,6 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
     mapping(address => Supply) public minterSupply;
     uint256 public totalMintCap; // total mint cap
     uint256 public totalMinted; // total minted amount
-
-    enum TokenType {
-        MintBurnAny,  // mint and burn(address from, uint256 amount), don't need approve
-        MintBurnFrom, // mint and burnFrom(address from, uint256 amount), need approve
-        MintBurnSelf, // mint and burn(uint256 amount), call transferFrom first, need approve
-        Transfer,     // transfer and transferFrom, need approve
-        TransferDeposit // transfer and transferFrom, deposit and withdraw, need approve
-    }
 
     address public immutable token; // the target token this contract is wrapping
     TokenType public immutable tokenType;
@@ -143,7 +148,9 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         totalMinted += amount;
         require(totalMinted <= totalMintCap, "total mint cap exceeded");
 
-        if (tokenType == TokenType.Transfer || tokenType == TokenType.TransferDeposit) {
+        if (tokenType == TokenType.Transfer ||
+            tokenType == TokenType.TransferDeposit ||
+            tokenType == TokenType.TransferDeposit2) {
             IERC20(token).safeTransfer(to, amount);
         } else {
             TokenOperation.safeMint(token, to, amount);
@@ -169,7 +176,9 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         require(totalMinted >= amount, "total burn amount exceeded");
         totalMinted -= amount;
 
-        if (tokenType == TokenType.Transfer || tokenType == TokenType.TransferDeposit) {
+        if (tokenType == TokenType.Transfer ||
+            tokenType == TokenType.TransferDeposit ||
+            tokenType == TokenType.TransferDeposit2) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
         } else if (tokenType == TokenType.MintBurnAny) {
             TokenOperation.safeBurnAny(token, from, amount);
@@ -233,7 +242,8 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         whenNotPaused(PAUSE_DEPOSIT_ROLE)
         returns (uint256)
     {
-        require(tokenType == TokenType.TransferDeposit, "forbid depoist");
+        require(tokenType == TokenType.TransferDeposit ||
+                tokenType == TokenType.TransferDeposit2, "forbid depoist");
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         depositBalance[to] += amount;
         return amount;
@@ -244,7 +254,8 @@ contract MintBurnWrapper is IBridge, IRouter, AccessControlEnumerable, PausableC
         whenNotPaused(PAUSE_WITHDRAW_ROLE)
         returns (uint256)
     {
-        require(tokenType == TokenType.TransferDeposit, "forbid withdraw");
+        require(tokenType == TokenType.TransferDeposit ||
+                tokenType == TokenType.TransferDeposit2, "forbid withdraw");
         depositBalance[msg.sender] -= amount;
         IERC20(token).safeTransfer(to, amount);
         return amount;
