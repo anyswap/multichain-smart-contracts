@@ -127,4 +127,41 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
 
         return (true, abi.encode(recvToken, recvAmount));
     }
+
+    function retrySwapinAndExec(
+        address router,
+        string memory swapID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        bytes calldata data,
+        bool dontExec
+    ) external {
+        require(supportedCaller[router], "unsupported router");
+        AnycallInfo memory info = decode_anycall_info(data);
+        require(msg.sender == info.receiver, "forbid call retry");
+
+        address _underlying = IUnderlying(token).underlying();
+        require(_underlying != address(0), "zero underlying");
+        uint256 old_balance = IERC20(_underlying).balanceOf(address(this));
+
+        IRetrySwapinAndExec(router).retrySwapinAndExec(
+            swapID,
+            token,
+            receiver,
+            amount,
+            fromChainID,
+            address(this),
+            data,
+            dontExec
+        );
+
+        if (dontExec) {
+            // process don't exec situation (eg. return token)
+            uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
+            require(new_balance >= old_balance && new_balance <= old_balance + amount, "balance check failed");
+            IERC20(IUnderlying(token).underlying()).safeTransfer(info.receiver, new_balance - old_balance);
+        }
+    }
 }
