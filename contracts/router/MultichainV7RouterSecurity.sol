@@ -4,6 +4,7 @@ pragma solidity ^0.8.10;
 
 import "../access/MPCManageable.sol";
 import "../access/PausableControlWithAdmin.sol";
+import "./interfaces/IRouterSecurity.sol";
 
 abstract contract RoleControl is MPCManageable, PausableControlWithAdmin {
     mapping(address => bool) public isSupportedCaller;
@@ -43,15 +44,7 @@ abstract contract RoleControl is MPCManageable, PausableControlWithAdmin {
     }
 }
 
-struct SwapInfo {
-    bytes32 swapoutID;
-    address token;
-    address receiver;
-    uint256 amount;
-    uint256 fromChainID;
-}
-
-contract MultichainV7RouterSecurity is RoleControl {
+contract MultichainV7RouterSecurity is IRouterSecurity, RoleControl {
     bytes32 public constant Pause_Register_Swapin =
         keccak256("Pause_Register_Swapin");
     bytes32 public constant Pause_Register_Swapout =

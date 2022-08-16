@@ -4,6 +4,8 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AnycallProxyBase.sol";
+import "../interfaces/IRetrySwapinAndExec.sol";
+import "../interfaces/IUnderlying.sol";
 
 interface ICurveAave {
     function coins(uint256 index) external view returns (address);

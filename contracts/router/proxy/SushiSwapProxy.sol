@@ -4,6 +4,9 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AnycallProxyBase.sol";
+import "../interfaces/IRetrySwapinAndExec.sol";
+import "../interfaces/IUnderlying.sol";
+import "../interfaces/IwNATIVE.sol";
 
 library SafeMathSushiswap {
     function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
@@ -23,10 +26,6 @@ library SafeMathSushiswap {
             require(y == 0 || (z = x * y) / y == x, "ds-math-mul-overflow");
         }
     }
-}
-
-interface IwNATIVE {
-    function withdraw(uint256) external;
 }
 
 interface ISushiswapV2Factory {

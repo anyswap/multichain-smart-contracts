@@ -3,25 +3,8 @@ pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../access/MPCAdminsControl.sol";
-
-/// IAnycallProxy interface of the anycall proxy
-interface IAnycallProxy {
-    function exec(
-        address _token,
-        uint256 _amount,
-        bytes calldata _data
-    ) external returns (bool success, bytes memory result);
-}
-
-/// IAnycallExecutor interface of the anycall executor
-interface IAnycallExecutor {
-    function execute(
-        address _anycallProxy,
-        address _token,
-        uint256 _amount,
-        bytes calldata _data
-    ) external returns (bool success, bytes memory result);
-}
+import "./interfaces/IAnycallProxy.sol";
+import "./interfaces/IAnycallExecutor.sol";
 
 /// anycall executor is the delegator to execute contract calling (like a sandbox)
 contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
@@ -43,7 +26,11 @@ contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
         return authCallers.length();
     }
 
-    function getAuthCallerAtIndex(uint256 index) external view returns (address) {
+    function getAuthCallerAtIndex(uint256 index)
+        external
+        view
+        returns (address)
+    {
         return authCallers.at(index);
     }
 
@@ -52,13 +39,13 @@ contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
     }
 
     function addAuthCallers(address[] calldata _callers) external onlyAdmin {
-        for(uint256 i = 0; i < _callers.length; i++) {
+        for (uint256 i = 0; i < _callers.length; i++) {
             authCallers.add(_callers[i]);
         }
     }
 
     function removeAuthCallers(address[] calldata _callers) external onlyAdmin {
-        for(uint256 i = 0; i < _callers.length; i++) {
+        for (uint256 i = 0; i < _callers.length; i++) {
             authCallers.remove(_callers[i]);
         }
     }

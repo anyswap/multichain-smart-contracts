@@ -6,73 +6,19 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../access/MPCManageable.sol";
 import "../access/PausableControlWithAdmin.sol";
-
-interface IRouter {
-    function mint(address to, uint256 amount) external returns (bool);
-
-    function burn(address from, uint256 amount) external returns (bool);
-}
-
-interface IUnderlying {
-    function underlying() external view returns (address);
-
-    function deposit(uint256 amount, address to) external returns (uint256);
-
-    function withdraw(uint256 amount, address to) external returns (uint256);
-}
-
-interface IAnyswapERC20Auth {
-    function changeVault(address newVault) external returns (bool);
-}
-
-interface IwNATIVE {
-    function deposit() external payable;
-
-    function withdraw(uint256) external;
-}
-
-interface IAnycallExecutor {
-    function execute(
-        address _anycallProxy,
-        address _token,
-        uint256 _amount,
-        bytes calldata _data
-    ) external returns (bool success, bytes memory result);
-}
-
-struct SwapInfo {
-    bytes32 swapoutID;
-    address token;
-    address receiver;
-    uint256 amount;
-    uint256 fromChainID;
-}
-
-interface IRouterSecurity {
-    function registerSwapin(string calldata swapID, SwapInfo calldata swapInfo)
-        external;
-
-    function registerSwapout(
-        address token,
-        address from,
-        string calldata to,
-        uint256 amount,
-        uint256 toChainID,
-        string calldata anycallProxy,
-        bytes calldata data
-    ) external returns (bytes32 swapoutID);
-
-    function isSwapCompleted(
-        string calldata swapID,
-        bytes32 swapoutID,
-        uint256 fromChainID
-    ) external view returns (bool);
-}
+import "./interfaces/IAnycallExecutor.sol";
+import "./interfaces/IRouterSecurity.sol";
+import "./interfaces/IRetrySwapinAndExec.sol";
+import "./interfaces/IUnderlying.sol";
+import "./interfaces/IwNATIVE.sol";
+import "./interfaces/IAnyswapERC20Auth.sol";
+import "./interfaces/IRouterMintBurn.sol";
 
 contract MultichainV7Router is
     MPCManageable,
     PausableControlWithAdmin,
-    ReentrancyGuard
+    ReentrancyGuard,
+    IRetrySwapinAndExec
 {
     using Address for address;
     using SafeERC20 for IERC20;
@@ -231,7 +177,7 @@ contract MultichainV7Router is
             "",
             ""
         );
-        assert(IRouter(token).burn(msg.sender, amount));
+        assert(IRouterMintBurn(token).burn(msg.sender, amount));
         emit LogAnySwapOut(swapoutID, token, msg.sender, to, amount, toChainID);
     }
 
@@ -259,7 +205,7 @@ contract MultichainV7Router is
             anycallProxy,
             data
         );
-        assert(IRouter(token).burn(msg.sender, amount));
+        assert(IRouterMintBurn(token).burn(msg.sender, amount));
         emit LogAnySwapOutAndCall(
             swapoutID,
             token,
@@ -433,7 +379,10 @@ contract MultichainV7Router is
     {
         IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
         assert(
-            IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+            IRouterMintBurn(swapInfo.token).mint(
+                swapInfo.receiver,
+                swapInfo.amount
+            )
         );
         emit LogAnySwapIn(
             swapID,
@@ -455,7 +404,9 @@ contract MultichainV7Router is
             "MultichainRouter: zero underlying"
         );
         IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
-        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        assert(
+            IRouterMintBurn(swapInfo.token).mint(address(this), swapInfo.amount)
+        );
         IUnderlying(swapInfo.token).withdraw(
             swapInfo.amount,
             swapInfo.receiver
@@ -483,7 +434,9 @@ contract MultichainV7Router is
             "MultichainRouter: underlying is not wNATIVE"
         );
         IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
-        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        assert(
+            IRouterMintBurn(swapInfo.token).mint(address(this), swapInfo.amount)
+        );
         IUnderlying(swapInfo.token).withdraw(swapInfo.amount, address(this));
         IwNATIVE(wNATIVE).withdraw(swapInfo.amount);
         Address.sendValue(payable(swapInfo.receiver), swapInfo.amount);
@@ -511,7 +464,10 @@ contract MultichainV7Router is
             IERC20(_underlying).balanceOf(swapInfo.token) >= swapInfo.amount
         ) {
             assert(
-                IRouter(swapInfo.token).mint(address(this), swapInfo.amount)
+                IRouterMintBurn(swapInfo.token).mint(
+                    address(this),
+                    swapInfo.amount
+                )
             );
             if (_underlying == wNATIVE) {
                 IUnderlying(swapInfo.token).withdraw(
@@ -528,7 +484,10 @@ contract MultichainV7Router is
             }
         } else {
             assert(
-                IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+                IRouterMintBurn(swapInfo.token).mint(
+                    swapInfo.receiver,
+                    swapInfo.amount
+                )
             );
         }
         emit LogAnySwapIn(
@@ -561,7 +520,10 @@ contract MultichainV7Router is
         IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
 
         assert(
-            IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+            IRouterMintBurn(swapInfo.token).mint(
+                swapInfo.receiver,
+                swapInfo.amount
+            )
         );
 
         bool success;
@@ -622,7 +584,10 @@ contract MultichainV7Router is
             ) {
                 receiveToken = _underlying;
                 assert(
-                    IRouter(swapInfo.token).mint(address(this), swapInfo.amount)
+                    IRouterMintBurn(swapInfo.token).mint(
+                        address(this),
+                        swapInfo.amount
+                    )
                 );
                 IUnderlying(swapInfo.token).withdraw(
                     swapInfo.amount,
@@ -631,7 +596,7 @@ contract MultichainV7Router is
             } else if (anycallProxyInfo[anycallProxy].acceptAnyToken) {
                 receiveToken = swapInfo.token;
                 assert(
-                    IRouter(swapInfo.token).mint(
+                    IRouterMintBurn(swapInfo.token).mint(
                         swapInfo.receiver,
                         swapInfo.amount
                     )
@@ -731,7 +696,9 @@ contract MultichainV7Router is
             IERC20(_underlying).balanceOf(swapInfo.token) >= swapInfo.amount,
             "MultichainRouter: retry failed"
         );
-        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        assert(
+            IRouterMintBurn(swapInfo.token).mint(address(this), swapInfo.amount)
+        );
         IUnderlying(swapInfo.token).withdraw(
             swapInfo.amount,
             swapInfo.receiver
@@ -772,7 +739,7 @@ contract MultichainV7Router is
         nonReentrant
         onlyMPC
     {
-        IRouter(token).mint(address(this), amount);
+        IRouterMintBurn(token).mint(address(this), amount);
         IUnderlying(token).withdraw(amount, msg.sender);
     }
 }
