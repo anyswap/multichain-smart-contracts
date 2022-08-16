@@ -12,13 +12,18 @@ interface IAnycallProxy {
     ) external returns (bool success, bytes memory result);
 }
 
+struct SwapInfo {
+    bytes32 swapoutID;
+    address token;
+    address receiver;
+    uint256 amount;
+    uint256 fromChainID;
+}
+
 interface IRetrySwapinAndExec {
     function retrySwapinAndExec(
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
+        string calldata swapID,
+        SwapInfo calldata swapInfo,
         address anycallProxy,
         bytes calldata data,
         bool dontExec

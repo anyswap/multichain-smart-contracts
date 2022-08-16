@@ -348,11 +348,8 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
 
     function retrySwapinAndExec(
         address router,
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
+        string calldata swapID,
+        SwapInfo calldata swapInfo,
         bytes calldata data,
         bool dontExec
     ) external {
@@ -360,16 +357,13 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
         require(msg.sender == anycallInfo.receiver, "forbid call retry");
 
-        address _underlying = IUnderlying(token).underlying();
+        address _underlying = IUnderlying(swapInfo.token).underlying();
         require(_underlying != address(0), "zero underlying");
         uint256 old_balance = IERC20(_underlying).balanceOf(address(this));
 
         IRetrySwapinAndExec(router).retrySwapinAndExec(
             swapID,
-            token,
-            receiver,
-            amount,
-            fromChainID,
+            swapInfo,
             address(this),
             data,
             dontExec
@@ -379,10 +373,10 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
             uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
             require(
                 new_balance >= old_balance &&
-                    new_balance <= old_balance + amount,
+                    new_balance <= old_balance + swapInfo.amount,
                 "balance check failed"
             );
-            IERC20(IUnderlying(token).underlying()).safeTransfer(
+            IERC20(_underlying).safeTransfer(
                 anycallInfo.receiver,
                 new_balance - old_balance
             );

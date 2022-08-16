@@ -6,6 +6,8 @@ related smart contracts
 
 ```text
 contracts/router/
+├── AnyCallExecutor.sol
+├── MultichainV7RouterSecurity.sol
 ├── MultichainV7Router.sol
 └── proxy
     └── SushiSwapProxy.sol
@@ -14,7 +16,9 @@ contracts/router/
 Notation: the following steps are not the unique way.
 we can change the orders and setting to complete the same job.
 
-## 0. deploy `AnycallExecutor` in `AnyCallExecutor.sol`
+## 0. deploy association contracts
+
+### 0.1. deploy `AnycallExecutor` in `AnyCallExecutor.sol`
 
 `AnycallExecutor` is the delegator to execute contract calling (like a sandbox) to enfore security.
 
@@ -27,6 +31,17 @@ we can change the orders and setting to complete the same job.
     function isAuthCaller(address _caller) external view returns (bool)
 ```
 
+### 0.2. deploy `MultichainV7RouterSecurity` in `MultichainV7RouterSecurity.sol`
+
+`MultichainV7RouterSecurity` is a security guard for router v7 contract, and can be updated
+
+```solidity
+    constructor(address _admin, address _mpc)
+
+    function addSupportedCaller(address caller) external
+    function removeSupportedCaller(address caller) external
+```
+
 ## 1. deploy `MultichainV7Router` in `MultichainV7Router.sol`
 
 ```solidity
@@ -34,16 +49,20 @@ we can change the orders and setting to complete the same job.
         address _admin,
         address _mpc,
         address _wNATIVE,
-        address _anycallExecutor
+        address _anycallExecutor,
+        address _routerSecurity
     )
 ```
 
 `wNATIVE` and `anycallExecutor` is `immutable`, which means they can not be change after deployed.
 
-set `_anycallExecutor` to the address of the contract deployed at step 0.
+set `_anycallExecutor` to the address of the contract `AnycallExecutor` deployed at step 0.1
+
+set `_routerSecurity` to the address of the contract `MultichainV7RouterSecurity` deployed at step 0.2
 
 and we should add the deployed `MultichainV7Router` contract to auth callers of `AnycallExecutor`, by calling `AnycallExecutor::addAuthCallers`.
 
+and we should add the deployed `MultichainV7Router` contract to supported callers of `MultichainV7RouterSecurity`, by calling `MultichainV7RouterSecurity::addSupportedCaller`.
 
 ## 2. deploy `AnycallProxy_SushiSwap` in `SushiSwapProxy.sol`
 

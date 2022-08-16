@@ -40,6 +40,35 @@ interface IAnycallExecutor {
     ) external returns (bool success, bytes memory result);
 }
 
+struct SwapInfo {
+    bytes32 swapoutID;
+    address token;
+    address receiver;
+    uint256 amount;
+    uint256 fromChainID;
+}
+
+interface IRouterSecurity {
+    function registerSwapin(string calldata swapID, SwapInfo calldata swapInfo)
+        external;
+
+    function registerSwapout(
+        address token,
+        address from,
+        string calldata to,
+        uint256 amount,
+        uint256 toChainID,
+        string calldata anycallProxy,
+        bytes calldata data
+    ) external returns (bytes32 swapoutID);
+
+    function isSwapCompleted(
+        string calldata swapID,
+        bytes32 swapoutID,
+        uint256 fromChainID
+    ) external view returns (bool);
+}
+
 contract MultichainV7Router is
     MPCManageable,
     PausableControlWithAdmin,
@@ -54,11 +83,11 @@ contract MultichainV7Router is
         keccak256("Swapout_Paused_ROLE");
     bytes32 public constant Call_Paused_ROLE = keccak256("Call_Paused_ROLE");
     bytes32 public constant Exec_Paused_ROLE = keccak256("Exec_Paused_ROLE");
-    bytes32 public constant Check_Completion_Paused_ROLE =
-        keccak256("Check_Completion_Paused_ROLE");
 
     address public immutable wNATIVE;
     address public immutable anycallExecutor;
+
+    address public routerSecurity;
 
     struct ProxyInfo {
         bool supported;
@@ -67,49 +96,40 @@ contract MultichainV7Router is
 
     mapping(address => ProxyInfo) public anycallProxyInfo;
     mapping(bytes32 => bool) public retryRecords;
-    mapping(string => bool) public completedSwapin;
-
-    modifier checkCompletion(string memory swapID) {
-        require(
-            !completedSwapin[swapID] || paused(Check_Completion_Paused_ROLE),
-            "swap is completed"
-        );
-        _;
-    }
 
     event LogAnySwapIn(
         string swapID,
+        bytes32 indexed swapoutID,
         address indexed token,
-        address indexed to,
+        address indexed receiver,
         uint256 amount,
-        uint256 fromChainID,
-        uint256 toChainID
+        uint256 fromChainID
     );
     event LogAnySwapOut(
+        bytes32 indexed swapoutID,
         address indexed token,
         address indexed from,
-        string to,
+        string receiver,
         uint256 amount,
-        uint256 fromChainID,
         uint256 toChainID
     );
 
     event LogAnySwapInAndExec(
         string swapID,
+        bytes32 indexed swapoutID,
         address indexed token,
         address indexed receiver,
         uint256 amount,
         uint256 fromChainID,
-        uint256 toChainID,
         bool success,
         bytes result
     );
     event LogAnySwapOutAndCall(
+        bytes32 indexed swapoutID,
         address indexed token,
         address indexed from,
-        string to,
+        string receiver,
         uint256 amount,
-        uint256 fromChainID,
         uint256 toChainID,
         string anycallProxy,
         bytes data
@@ -117,6 +137,7 @@ contract MultichainV7Router is
 
     event LogRetryExecRecord(
         string swapID,
+        bytes32 swapoutID,
         address token,
         address receiver,
         uint256 amount,
@@ -124,20 +145,41 @@ contract MultichainV7Router is
         address anycallProxy,
         bytes data
     );
+    event LogRetrySwapInAndExec(
+        string swapID,
+        bytes32 swapoutID,
+        address token,
+        address receiver,
+        uint256 amount,
+        uint256 fromChainID,
+        bool dontExec,
+        bool success,
+        bytes result
+    );
 
     constructor(
         address _admin,
         address _mpc,
         address _wNATIVE,
-        address _anycallExecutor
+        address _anycallExecutor,
+        address _routerSecurity
     ) MPCManageable(_mpc) PausableControlWithAdmin(_admin) {
         require(_anycallExecutor != address(0), "zero anycall executor");
         anycallExecutor = _anycallExecutor;
         wNATIVE = _wNATIVE;
+        routerSecurity = _routerSecurity;
     }
 
     receive() external payable {
         assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
+    }
+
+    function setRouterSecurity(address _routerSecurity)
+        external
+        nonReentrant
+        onlyMPC
+    {
+        routerSecurity = _routerSecurity;
     }
 
     function changeVault(address token, address newVault)
@@ -150,8 +192,8 @@ contract MultichainV7Router is
     }
 
     function addAnycallProxies(
-        address[] memory proxies,
-        bool[] memory acceptAnyTokenFlags
+        address[] calldata proxies,
+        bool[] calldata acceptAnyTokenFlags
     ) external nonReentrant onlyMPC {
         uint256 length = proxies.length;
         require(length == acceptAnyTokenFlags.length, "length mismatch");
@@ -163,7 +205,7 @@ contract MultichainV7Router is
         }
     }
 
-    function removeAnycallProxies(address[] memory proxies)
+    function removeAnycallProxies(address[] calldata proxies)
         external
         nonReentrant
         onlyMPC
@@ -176,28 +218,30 @@ contract MultichainV7Router is
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to`
     function anySwapOut(
         address token,
-        string memory to,
+        string calldata to,
         uint256 amount,
         uint256 toChainID
     ) external whenNotPaused(Swapout_Paused_ROLE) nonReentrant {
-        assert(IRouter(token).burn(msg.sender, amount));
-        emit LogAnySwapOut(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             amount,
-            block.chainid,
-            toChainID
+            toChainID,
+            "",
+            ""
         );
+        assert(IRouter(token).burn(msg.sender, amount));
+        emit LogAnySwapOut(swapoutID, token, msg.sender, to, amount, toChainID);
     }
 
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutAndCall(
         address token,
-        string memory to,
+        string calldata to,
         uint256 amount,
         uint256 toChainID,
-        string memory anycallProxy,
+        string calldata anycallProxy,
         bytes calldata data
     )
         external
@@ -206,13 +250,22 @@ contract MultichainV7Router is
         nonReentrant
     {
         require(data.length > 0, "empty call data");
-        assert(IRouter(token).burn(msg.sender, amount));
-        emit LogAnySwapOutAndCall(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             amount,
-            block.chainid,
+            toChainID,
+            anycallProxy,
+            data
+        );
+        assert(IRouter(token).burn(msg.sender, amount));
+        emit LogAnySwapOutAndCall(
+            swapoutID,
+            token,
+            msg.sender,
+            to,
+            amount,
             toChainID,
             anycallProxy,
             data
@@ -238,17 +291,26 @@ contract MultichainV7Router is
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying`
     function anySwapOutUnderlying(
         address token,
-        string memory to,
+        string calldata to,
         uint256 amount,
         uint256 toChainID
     ) external nonReentrant {
         uint256 recvAmount = _anySwapOutUnderlying(token, amount);
-        emit LogAnySwapOut(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             recvAmount,
-            block.chainid,
+            toChainID,
+            "",
+            ""
+        );
+        emit LogAnySwapOut(
+            swapoutID,
+            token,
+            msg.sender,
+            to,
+            recvAmount,
             toChainID
         );
     }
@@ -256,20 +318,29 @@ contract MultichainV7Router is
     // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call anycall proxy with `data`
     function anySwapOutUnderlyingAndCall(
         address token,
-        string memory to,
+        string calldata to,
         uint256 amount,
         uint256 toChainID,
-        string memory anycallProxy,
+        string calldata anycallProxy,
         bytes calldata data
     ) external whenNotPaused(Call_Paused_ROLE) nonReentrant {
         require(data.length > 0, "empty call data");
         uint256 recvAmount = _anySwapOutUnderlying(token, amount);
-        emit LogAnySwapOutAndCall(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             recvAmount,
-            block.chainid,
+            toChainID,
+            anycallProxy,
+            data
+        );
+        emit LogAnySwapOutAndCall(
+            swapoutID,
+            token,
+            msg.sender,
+            to,
+            recvAmount,
             toChainID,
             anycallProxy,
             data
@@ -299,16 +370,25 @@ contract MultichainV7Router is
     // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to`
     function anySwapOutNative(
         address token,
-        string memory to,
+        string calldata to,
         uint256 toChainID
     ) external payable nonReentrant {
         uint256 recvAmount = _anySwapOutNative(token);
-        emit LogAnySwapOut(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             recvAmount,
-            block.chainid,
+            toChainID,
+            "",
+            ""
+        );
+        emit LogAnySwapOut(
+            swapoutID,
+            token,
+            msg.sender,
+            to,
+            recvAmount,
             toChainID
         );
     }
@@ -316,19 +396,28 @@ contract MultichainV7Router is
     // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
     function anySwapOutNativeAndCall(
         address token,
-        string memory to,
+        string calldata to,
         uint256 toChainID,
-        string memory anycallProxy,
+        string calldata anycallProxy,
         bytes calldata data
     ) external payable whenNotPaused(Call_Paused_ROLE) nonReentrant {
         require(data.length > 0, "empty call data");
         uint256 recvAmount = _anySwapOutNative(token);
-        emit LogAnySwapOutAndCall(
+        bytes32 swapoutID = IRouterSecurity(routerSecurity).registerSwapout(
             token,
             msg.sender,
             to,
             recvAmount,
-            block.chainid,
+            toChainID,
+            anycallProxy,
+            data
+        );
+        emit LogAnySwapOutAndCall(
+            swapoutID,
+            token,
+            msg.sender,
+            to,
+            recvAmount,
             toChainID,
             anycallProxy,
             data
@@ -336,151 +425,132 @@ contract MultichainV7Router is
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
-    function anySwapIn(
-        string memory swapID,
-        address token,
-        address to,
-        uint256 amount,
-        uint256 fromChainID
-    )
+    function anySwapIn(string calldata swapID, SwapInfo calldata swapInfo)
         external
         whenNotPaused(Swapin_Paused_ROLE)
-        checkCompletion(swapID)
         nonReentrant
         onlyMPC
     {
-        completedSwapin[swapID] = true;
-        assert(IRouter(token).mint(to, amount));
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
+        assert(
+            IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+        );
         emit LogAnySwapIn(
             swapID,
-            token,
-            to,
-            amount,
-            fromChainID,
-            block.chainid
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID
         );
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
     function anySwapInUnderlying(
-        string memory swapID,
-        address token,
-        address to,
-        uint256 amount,
-        uint256 fromChainID
-    )
-        external
-        whenNotPaused(Swapin_Paused_ROLE)
-        checkCompletion(swapID)
-        nonReentrant
-        onlyMPC
-    {
+        string calldata swapID,
+        SwapInfo calldata swapInfo
+    ) external whenNotPaused(Swapin_Paused_ROLE) nonReentrant onlyMPC {
         require(
-            IUnderlying(token).underlying() != address(0),
+            IUnderlying(swapInfo.token).underlying() != address(0),
             "MultichainRouter: zero underlying"
         );
-        completedSwapin[swapID] = true;
-        assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, to);
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
+        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        IUnderlying(swapInfo.token).withdraw(
+            swapInfo.amount,
+            swapInfo.receiver
+        );
         emit LogAnySwapIn(
             swapID,
-            token,
-            to,
-            amount,
-            fromChainID,
-            block.chainid
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID
         );
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `Native`
-    function anySwapInNative(
-        string memory swapID,
-        address token,
-        address to,
-        uint256 amount,
-        uint256 fromChainID
-    )
+    function anySwapInNative(string calldata swapID, SwapInfo calldata swapInfo)
         external
         whenNotPaused(Swapin_Paused_ROLE)
-        checkCompletion(swapID)
         nonReentrant
         onlyMPC
     {
         require(wNATIVE != address(0), "MultichainRouter: zero wNATIVE");
         require(
-            IUnderlying(token).underlying() == wNATIVE,
+            IUnderlying(swapInfo.token).underlying() == wNATIVE,
             "MultichainRouter: underlying is not wNATIVE"
         );
-        completedSwapin[swapID] = true;
-        assert(IRouter(token).mint(address(this), amount));
-        IUnderlying(token).withdraw(amount, address(this));
-        IwNATIVE(wNATIVE).withdraw(amount);
-        Address.sendValue(payable(to), amount);
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
+        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        IUnderlying(swapInfo.token).withdraw(swapInfo.amount, address(this));
+        IwNATIVE(wNATIVE).withdraw(swapInfo.amount);
+        Address.sendValue(payable(swapInfo.receiver), swapInfo.amount);
         emit LogAnySwapIn(
             swapID,
-            token,
-            to,
-            amount,
-            fromChainID,
-            block.chainid
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID
         );
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying` or `Native` if possible
-    function anySwapInAuto(
-        string memory swapID,
-        address token,
-        address to,
-        uint256 amount,
-        uint256 fromChainID
-    )
+    function anySwapInAuto(string calldata swapID, SwapInfo calldata swapInfo)
         external
         whenNotPaused(Swapin_Paused_ROLE)
-        checkCompletion(swapID)
         nonReentrant
         onlyMPC
     {
-        completedSwapin[swapID] = true;
-        address _underlying = IUnderlying(token).underlying();
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
+        address _underlying = IUnderlying(swapInfo.token).underlying();
         if (
             _underlying != address(0) &&
-            IERC20(_underlying).balanceOf(token) >= amount
+            IERC20(_underlying).balanceOf(swapInfo.token) >= swapInfo.amount
         ) {
-            assert(IRouter(token).mint(address(this), amount));
+            assert(
+                IRouter(swapInfo.token).mint(address(this), swapInfo.amount)
+            );
             if (_underlying == wNATIVE) {
-                IUnderlying(token).withdraw(amount, address(this));
-                IwNATIVE(wNATIVE).withdraw(amount);
-                Address.sendValue(payable(to), amount);
+                IUnderlying(swapInfo.token).withdraw(
+                    swapInfo.amount,
+                    address(this)
+                );
+                IwNATIVE(wNATIVE).withdraw(swapInfo.amount);
+                Address.sendValue(payable(swapInfo.receiver), swapInfo.amount);
             } else {
-                IUnderlying(token).withdraw(amount, to);
+                IUnderlying(swapInfo.token).withdraw(
+                    swapInfo.amount,
+                    swapInfo.receiver
+                );
             }
         } else {
-            assert(IRouter(token).mint(to, amount));
+            assert(
+                IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+            );
         }
         emit LogAnySwapIn(
             swapID,
-            token,
-            to,
-            amount,
-            fromChainID,
-            block.chainid
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID
         );
     }
 
     // Swaps `amount` `token` in `fromChainID` to `to` on this chainID
     function anySwapInAndExec(
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
+        string calldata swapID,
+        SwapInfo calldata swapInfo,
         address anycallProxy,
         bytes calldata data
     )
         external
         whenNotPaused(Swapin_Paused_ROLE)
         whenNotPaused(Exec_Paused_ROLE)
-        checkCompletion(swapID)
         nonReentrant
         onlyMPC
     {
@@ -488,17 +558,19 @@ contract MultichainV7Router is
             anycallProxyInfo[anycallProxy].supported,
             "unsupported ancall proxy"
         );
-        completedSwapin[swapID] = true;
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
 
-        assert(IRouter(token).mint(receiver, amount));
+        assert(
+            IRouter(swapInfo.token).mint(swapInfo.receiver, swapInfo.amount)
+        );
 
         bool success;
         bytes memory result;
         try
             IAnycallExecutor(anycallExecutor).execute(
                 anycallProxy,
-                token,
-                amount,
+                swapInfo.token,
+                swapInfo.amount,
                 data
             )
         returns (bool succ, bytes memory res) {
@@ -507,62 +579,72 @@ contract MultichainV7Router is
 
         emit LogAnySwapInAndExec(
             swapID,
-            token,
-            receiver,
-            amount,
-            fromChainID,
-            block.chainid,
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID,
             success,
             result
         );
     }
 
-    function _anySwapInUnderlyingAndExec(
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
+    // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
+    function anySwapInUnderlyingAndExec(
+        string calldata swapID,
+        SwapInfo calldata swapInfo,
         address anycallProxy,
-        bytes calldata data,
-        bool isRetry
+        bytes calldata data
     )
-        internal
+        external
         whenNotPaused(Swapin_Paused_ROLE)
         whenNotPaused(Exec_Paused_ROLE)
+        nonReentrant
+        onlyMPC
     {
         require(
             anycallProxyInfo[anycallProxy].supported,
             "unsupported ancall proxy"
         );
-        completedSwapin[swapID] = true;
+        IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
 
         address receiveToken;
-
+        // transfer token to the receiver before execution
         {
-            // fix Stack too deep
-            address _underlying = IUnderlying(token).underlying();
+            address _underlying = IUnderlying(swapInfo.token).underlying();
             require(
                 _underlying != address(0),
                 "MultichainRouter: zero underlying"
             );
 
-            if (IERC20(_underlying).balanceOf(token) >= amount) {
+            if (
+                IERC20(_underlying).balanceOf(swapInfo.token) >= swapInfo.amount
+            ) {
                 receiveToken = _underlying;
-                assert(IRouter(token).mint(address(this), amount));
-                IUnderlying(token).withdraw(amount, receiver);
+                assert(
+                    IRouter(swapInfo.token).mint(address(this), swapInfo.amount)
+                );
+                IUnderlying(swapInfo.token).withdraw(
+                    swapInfo.amount,
+                    swapInfo.receiver
+                );
             } else if (anycallProxyInfo[anycallProxy].acceptAnyToken) {
-                receiveToken = token;
-                assert(IRouter(token).mint(receiver, amount));
+                receiveToken = swapInfo.token;
+                assert(
+                    IRouter(swapInfo.token).mint(
+                        swapInfo.receiver,
+                        swapInfo.amount
+                    )
+                );
             } else {
-                require(!isRetry, "MultichainRouter: retry failed");
                 bytes32 retryHash = keccak256(
                     abi.encode(
                         swapID,
-                        token,
-                        receiver,
-                        amount,
-                        fromChainID,
+                        swapInfo.swapoutID,
+                        swapInfo.token,
+                        swapInfo.receiver,
+                        swapInfo.amount,
+                        swapInfo.fromChainID,
                         anycallProxy,
                         data
                     )
@@ -570,10 +652,11 @@ contract MultichainV7Router is
                 retryRecords[retryHash] = true;
                 emit LogRetryExecRecord(
                     swapID,
-                    token,
-                    receiver,
-                    amount,
-                    fromChainID,
+                    swapInfo.swapoutID,
+                    swapInfo.token,
+                    swapInfo.receiver,
+                    swapInfo.amount,
+                    swapInfo.fromChainID,
                     anycallProxy,
                     data
                 );
@@ -587,48 +670,22 @@ contract MultichainV7Router is
             IAnycallExecutor(anycallExecutor).execute(
                 anycallProxy,
                 receiveToken,
-                amount,
+                swapInfo.amount,
                 data
             )
         returns (bool succ, bytes memory res) {
             (success, result) = (succ, res);
         } catch {}
 
-        {
-            // fix Stack too deep
-            string memory _swapID = swapID;
-            emit LogAnySwapInAndExec(
-                _swapID,
-                token,
-                receiver,
-                amount,
-                fromChainID,
-                block.chainid,
-                success,
-                result
-            );
-        }
-    }
-
-    // Swaps `amount` `token` in `fromChainID` to `to` on this chainID with `to` receiving `underlying`
-    function anySwapInUnderlyingAndExec(
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
-        address anycallProxy,
-        bytes calldata data
-    ) external checkCompletion(swapID) nonReentrant onlyMPC {
-        _anySwapInUnderlyingAndExec(
+        emit LogAnySwapInAndExec(
             swapID,
-            token,
-            receiver,
-            amount,
-            fromChainID,
-            anycallProxy,
-            data,
-            false
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID,
+            success,
+            result
         );
     }
 
@@ -638,24 +695,29 @@ contract MultichainV7Router is
     //      and the `receiver` should complete the left job.
     // if `false` retry swapin and execute in normal way.
     function retrySwapinAndExec(
-        string memory swapID,
-        address token,
-        address receiver,
-        uint256 amount,
-        uint256 fromChainID,
+        string calldata swapID,
+        SwapInfo calldata swapInfo,
         address anycallProxy,
         bytes calldata data,
         bool dontExec
     ) external nonReentrant {
-        require(msg.sender == receiver, "forbid retry swap");
-        require(completedSwapin[swapID], "swap not completed");
+        require(msg.sender == swapInfo.receiver, "forbid retry swap");
+        require(
+            IRouterSecurity(routerSecurity).isSwapCompleted(
+                swapID,
+                swapInfo.swapoutID,
+                swapInfo.fromChainID
+            ),
+            "swap not completed"
+        );
         bytes32 retryHash = keccak256(
             abi.encode(
                 swapID,
-                token,
-                receiver,
-                amount,
-                fromChainID,
+                swapInfo.swapoutID,
+                swapInfo.token,
+                swapInfo.receiver,
+                swapInfo.amount,
+                swapInfo.fromChainID,
                 anycallProxy,
                 data
             )
@@ -663,30 +725,45 @@ contract MultichainV7Router is
         require(retryRecords[retryHash], "retry record not exist");
         retryRecords[retryHash] = false;
 
-        if (dontExec) {
-            address _underlying = IUnderlying(token).underlying();
-            require(
-                _underlying != address(0),
-                "MultichainRouter: zero underlying"
-            );
-            require(
-                IERC20(_underlying).balanceOf(token) >= amount,
-                "MultichainRouter: retry failed"
-            );
-            assert(IRouter(token).mint(address(this), amount));
-            IUnderlying(token).withdraw(amount, receiver);
-        } else {
-            _anySwapInUnderlyingAndExec(
-                swapID,
-                token,
-                receiver,
-                amount,
-                fromChainID,
-                anycallProxy,
-                data,
-                true
-            );
+        address _underlying = IUnderlying(swapInfo.token).underlying();
+        require(_underlying != address(0), "MultichainRouter: zero underlying");
+        require(
+            IERC20(_underlying).balanceOf(swapInfo.token) >= swapInfo.amount,
+            "MultichainRouter: retry failed"
+        );
+        assert(IRouter(swapInfo.token).mint(address(this), swapInfo.amount));
+        IUnderlying(swapInfo.token).withdraw(
+            swapInfo.amount,
+            swapInfo.receiver
+        );
+
+        bool success;
+        bytes memory result;
+
+        if (!dontExec) {
+            try
+                IAnycallExecutor(anycallExecutor).execute(
+                    anycallProxy,
+                    _underlying,
+                    swapInfo.amount,
+                    data
+                )
+            returns (bool succ, bytes memory res) {
+                (success, result) = (succ, res);
+            } catch {}
         }
+
+        emit LogRetrySwapInAndExec(
+            swapID,
+            swapInfo.swapoutID,
+            swapInfo.token,
+            swapInfo.receiver,
+            swapInfo.amount,
+            swapInfo.fromChainID,
+            dontExec,
+            success,
+            result
+        );
     }
 
     // extracts mpc fee from bridge fees
