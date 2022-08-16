@@ -377,8 +377,15 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         if (dontExec) {
             // process don't exec situation (eg. return token)
             uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
-            require(new_balance >= old_balance && new_balance <= old_balance + amount, "balance check failed");
-            IERC20(IUnderlying(token).underlying()).safeTransfer(anycallInfo.receiver, new_balance - old_balance);
+            require(
+                new_balance >= old_balance &&
+                    new_balance <= old_balance + amount,
+                "balance check failed"
+            );
+            IERC20(IUnderlying(token).underlying()).safeTransfer(
+                anycallInfo.receiver,
+                new_balance - old_balance
+            );
         }
     }
 

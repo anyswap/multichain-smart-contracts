@@ -7,10 +7,22 @@ import "./AnycallProxyBase.sol";
 
 interface ICurveAave {
     function coins(uint256 index) external view returns (address);
+
     function underlying_coins(uint256 index) external view returns (address);
 
-    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
-    function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
+    function exchange(
+        int128 i,
+        int128 j,
+        uint256 dx,
+        uint256 min_dy
+    ) external returns (uint256);
+
+    function exchange_underlying(
+        int128 i,
+        int128 j,
+        uint256 dx,
+        uint256 min_dy
+    ) external returns (uint256);
 }
 
 contract AnycallProxy_CurveAave is AnycallProxyBase {
@@ -28,11 +40,7 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         uint256 min_dy;
     }
 
-    event ExecFailed(
-        address indexed token,
-        uint256 amount,
-        bytes data
-    );
+    event ExecFailed(address indexed token, uint256 amount, bytes data);
 
     constructor(
         address _mpc,
@@ -80,7 +88,10 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
         AnycallInfo memory info = decode_anycall_info(data);
-        try this.execExchange(token, amount, info) returns (bool succ, bytes memory res) {
+        try this.execExchange(token, amount, info) returns (
+            bool succ,
+            bytes memory res
+        ) {
             (success, result) = (succ, res);
         } catch {
             // process failure situation (eg. return token)
@@ -118,7 +129,12 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
 
         uint256 recvAmount;
         if (info.is_exchange_underlying) {
-            recvAmount = pool.exchange_underlying(info.i, info.j, amount, info.min_dy);
+            recvAmount = pool.exchange_underlying(
+                info.i,
+                info.j,
+                amount,
+                info.min_dy
+            );
         } else {
             recvAmount = pool.exchange(info.i, info.j, amount, info.min_dy);
         }
@@ -160,8 +176,15 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         if (dontExec) {
             // process don't exec situation (eg. return token)
             uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
-            require(new_balance >= old_balance && new_balance <= old_balance + amount, "balance check failed");
-            IERC20(IUnderlying(token).underlying()).safeTransfer(info.receiver, new_balance - old_balance);
+            require(
+                new_balance >= old_balance &&
+                    new_balance <= old_balance + amount,
+                "balance check failed"
+            );
+            IERC20(IUnderlying(token).underlying()).safeTransfer(
+                info.receiver,
+                new_balance - old_balance
+            );
         }
     }
 }
