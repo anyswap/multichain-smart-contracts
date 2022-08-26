@@ -4,11 +4,19 @@ pragma solidity ^0.8.6;
 import "../../access/AdminControl.sol";
 
 interface IApp {
-    function anyExecute(bytes calldata _data) external returns (bool success, bytes memory result);
+    function anyExecute(bytes calldata _data)
+        external
+        returns (bool success, bytes memory result);
 }
 
 interface IAnycallExecutor {
-    function context() external returns (address from, uint256 fromChainID, uint256 nonce);
+    function context()
+        external
+        returns (
+            address from,
+            uint256 fromChainID,
+            uint256 nonce
+        );
 }
 
 interface IAnycallV6Proxy {
@@ -42,7 +50,10 @@ abstract contract AnycallClientBase is IApp, AdminControl {
     }
 
     receive() external payable {
-        require(msg.sender == callProxy, "AnycallClient: receive from forbidden sender");
+        require(
+            msg.sender == callProxy,
+            "AnycallClient: receive from forbidden sender"
+        );
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
@@ -63,15 +74,28 @@ abstract contract AnycallClientBase is IApp, AdminControl {
 }
 
 contract AnycallClientDemo is AnycallClientBase {
-    event LogCallin(string message, address sender, address receiver, uint256 fromChainId);
-    event LogCallout(string message, address sender, address receiver, uint256 toChainId);
-    event LogCalloutFail(string message, address sender, address receiver, uint256 toChainId);
+    event LogCallin(
+        string message,
+        address sender,
+        address receiver,
+        uint256 fromChainId
+    );
+    event LogCallout(
+        string message,
+        address sender,
+        address receiver,
+        uint256 toChainId
+    );
+    event LogCalloutFail(
+        string message,
+        address sender,
+        address receiver,
+        uint256 toChainId
+    );
 
-    constructor(
-        address _admin,
-        address _callProxy
-    ) AnycallClientBase(_admin, _callProxy) {
-    }
+    constructor(address _admin, address _callProxy)
+        AnycallClientBase(_admin, _callProxy)
+    {}
 
     /// @dev Call by the user to submit a request for a cross chain interaction
     /// flags is 0 means pay fee on destination chain
@@ -98,7 +122,7 @@ contract AnycallClientDemo is AnycallClientBase {
             receiver,
             toChainId
         );
-        IAnycallV6Proxy(callProxy).anyCall{value:msg.value}(
+        IAnycallV6Proxy(callProxy).anyCall{value: msg.value}(
             clientPeer,
             data,
             address(this), // has fallback processing in this contract
@@ -110,7 +134,9 @@ contract AnycallClientDemo is AnycallClientBase {
             uint256 newCoinBalance = address(this).balance;
             if (newCoinBalance > oldCoinBalance) {
                 // return remaining fees
-                (bool success,) = msg.sender.call{value: newCoinBalance - oldCoinBalance}("");
+                (bool success, ) = msg.sender.call{
+                    value: newCoinBalance - oldCoinBalance
+                }("");
                 require(success);
             }
         }
@@ -127,25 +153,29 @@ contract AnycallClientDemo is AnycallClientBase {
     {
         bytes4 selector = bytes4(data[:4]);
         if (selector == this.anyExecute.selector) {
-            (
-                string memory message,
-                address sender,
-                address receiver,
-                //uint256 toChainId
-            ) = abi.decode(
-                data[4:],
-                (string, address, address, uint256)
+            (string memory message, address sender, address receiver, ) = abi
+                .decode(data[4:], (string, address, address, uint256));
+
+            (address from, uint256 fromChainId, ) = IAnycallExecutor(executor)
+                .context();
+            require(
+                clientPeers[fromChainId] == from,
+                "AnycallClient: wrong context"
             );
 
-            (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
-            require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
-
             // Testing: add a condition of execute failure situation here to test fallbak function
-            require(bytes(message).length < 10, "AnycallClient: message too long");
+            require(
+                bytes(message).length < 10,
+                "AnycallClient: message too long"
+            );
 
             emit LogCallin(message, sender, receiver, fromChainId);
-        } else if (selector == 0xa35fe8bf) { // bytes4(keccak256('anyFallback(address,bytes)'))
-            (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
+        } else if (selector == 0xa35fe8bf) {
+            // bytes4(keccak256('anyFallback(address,bytes)'))
+            (address _to, bytes memory _data) = abi.decode(
+                data[4:],
+                (address, bytes)
+            );
             anyFallback(_to, _data);
         } else {
             return (false, "unknown selector");
@@ -154,7 +184,7 @@ contract AnycallClientDemo is AnycallClientBase {
     }
 
     function anyFallback(address to, bytes memory data) internal {
-        (address _from,,) = IAnycallExecutor(executor).context();
+        (address _from, , ) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
@@ -163,13 +193,16 @@ contract AnycallClientDemo is AnycallClientBase {
             address sender,
             address receiver,
             uint256 toChainId
-        ) = abi.decode(
-            data,
-            (bytes4, string, address, address, uint256)
-        );
+        ) = abi.decode(data, (bytes4, string, address, address, uint256));
 
-        require(selector == this.anyExecute.selector, "AnycallClient: wrong fallback data");
-        require(clientPeers[toChainId] == to, "AnycallClient: mismatch dest client");
+        require(
+            selector == this.anyExecute.selector,
+            "AnycallClient: wrong fallback data"
+        );
+        require(
+            clientPeers[toChainId] == to,
+            "AnycallClient: mismatch dest client"
+        );
 
         emit LogCalloutFail(message, sender, receiver, toChainId);
     }

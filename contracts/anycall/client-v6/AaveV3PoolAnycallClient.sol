@@ -21,11 +21,19 @@ interface IAaveV3Pool {
 }
 
 interface IApp {
-    function anyExecute(bytes calldata _data) external returns (bool success, bytes memory result);
+    function anyExecute(bytes calldata _data)
+        external
+        returns (bool success, bytes memory result);
 }
 
 interface IAnycallExecutor {
-    function context() external returns (address from, uint256 fromChainID, uint256 nonce);
+    function context()
+        external
+        returns (
+            address from,
+            uint256 fromChainID,
+            uint256 nonce
+        );
 }
 
 interface IAnycallV6Proxy {
@@ -50,14 +58,19 @@ abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
         _;
     }
 
-    constructor(address _admin, address _callProxy) PausableControlWithAdmin(_admin) {
+    constructor(address _admin, address _callProxy)
+        PausableControlWithAdmin(_admin)
+    {
         require(_callProxy != address(0));
         callProxy = _callProxy;
         executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     receive() external payable {
-        require(msg.sender == callProxy, "AnycallClient: receive from forbidden sender");
+        require(
+            msg.sender == callProxy,
+            "AnycallClient: receive from forbidden sender"
+        );
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
@@ -81,9 +94,11 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
     using SafeERC20 for IERC20;
 
     // pausable control roles
-    bytes32 public constant PAUSE_CALLOUT_ROLE = keccak256("PAUSE_CALLOUT_ROLE");
+    bytes32 public constant PAUSE_CALLOUT_ROLE =
+        keccak256("PAUSE_CALLOUT_ROLE");
     bytes32 public constant PAUSE_CALLIN_ROLE = keccak256("PAUSE_CALLIN_ROLE");
-    bytes32 public constant PAUSE_FALLBACK_ROLE = keccak256("PAUSE_FALLBACK_ROLE");
+    bytes32 public constant PAUSE_FALLBACK_ROLE =
+        keccak256("PAUSE_FALLBACK_ROLE");
     bytes32 public constant PAUSE_BACK_ROLE = keccak256("PAUSE_BACK_ROLE");
 
     address public aaveV3Pool;
@@ -92,16 +107,25 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
     mapping(address => mapping(uint256 => address)) public tokenPeers;
 
     event LogCallout(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 toChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 toChainId
     );
     event LogCallin(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 fromChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 fromChainId
     );
     event LogCalloutFail(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 toChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 toChainId
     );
 
     constructor(
@@ -160,7 +184,14 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             oldCoinBalance = address(this).balance - msg.value;
         }
 
+        uint256 old_balance = IERC20(token).balanceOf(address(this));
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 new_balance = IERC20(token).balanceOf(address(this));
+        require(
+            new_balance >= old_balance && new_balance <= old_balance + amount
+        );
+        // update amount to real balance increasement (some token may deduct fees)
+        amount = new_balance - old_balance;
 
         bytes memory data = abi.encodeWithSelector(
             this.anyExecute.selector,
@@ -171,7 +202,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             receiver,
             toChainId
         );
-        IAnycallV6Proxy(callProxy).anyCall{value:msg.value}(
+        IAnycallV6Proxy(callProxy).anyCall{value: msg.value}(
             clientPeer,
             data,
             address(this),
@@ -183,7 +214,9 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             uint256 newCoinBalance = address(this).balance;
             if (newCoinBalance > oldCoinBalance) {
                 // return remaining fees
-                (bool success,) = msg.sender.call{value: newCoinBalance - oldCoinBalance}("");
+                (bool success, ) = msg.sender.call{
+                    value: newCoinBalance - oldCoinBalance
+                }("");
                 require(success);
             }
         }
@@ -206,25 +239,45 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
                 uint256 amount,
                 address sender,
                 address receiver,
-                //uint256 toChainId
+
             ) = abi.decode(
-                data[4:],
-                (address, address, uint256, address, address, uint256)
+                    data[4:],
+                    (address, address, uint256, address, address, uint256)
+                );
+
+            (address from, uint256 fromChainId, ) = IAnycallExecutor(executor)
+                .context();
+            require(
+                clientPeers[fromChainId] == from,
+                "AnycallClient: wrong context"
+            );
+            require(
+                tokenPeers[dstToken][fromChainId] == srcToken,
+                "AnycallClient: mismatch source token"
             );
 
-            (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
-            require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
-            require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
-
             if (IERC20(dstToken).balanceOf(address(this)) >= amount) {
-                IERC20(dstToken).safeTransferFrom(address(this), receiver, amount);
+                IERC20(dstToken).safeTransferFrom(
+                    address(this),
+                    receiver,
+                    amount
+                );
             } else {
-                IAaveV3Pool(aaveV3Pool).mintUnbacked(dstToken, amount, receiver, referralCode);
+                IAaveV3Pool(aaveV3Pool).mintUnbacked(
+                    dstToken,
+                    amount,
+                    receiver,
+                    referralCode
+                );
             }
 
             emit LogCallin(dstToken, sender, receiver, amount, fromChainId);
-        } else if (selector == 0xa35fe8bf) { // bytes4(keccak256('anyFallback(address,bytes)'))
-            (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
+        } else if (selector == 0xa35fe8bf) {
+            // bytes4(keccak256('anyFallback(address,bytes)'))
+            (address _to, bytes memory _data) = abi.decode(
+                data[4:],
+                (address, bytes)
+            );
             anyFallback(_to, _data);
         } else {
             return (false, "unknown selector");
@@ -236,7 +289,7 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
         internal
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
-        (address _from,,) = IAnycallExecutor(executor).context();
+        (address _from, , ) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
@@ -248,18 +301,32 @@ contract AaveV3PoolAnycallClient is AnycallClientBase, MPCManageable {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data,
-            (bytes4, address, address, uint256, address, address, uint256)
-        );
+                data,
+                (bytes4, address, address, uint256, address, address, uint256)
+            );
 
-        require(selector == this.anyExecute.selector, "AnycallClient: wrong fallback data");
-        require(clientPeers[toChainId] == to, "AnycallClient: mismatch dest client");
-        require(tokenPeers[srcToken][toChainId] == dstToken, "AnycallClient: mismatch dest token");
+        require(
+            selector == this.anyExecute.selector,
+            "AnycallClient: wrong fallback data"
+        );
+        require(
+            clientPeers[toChainId] == to,
+            "AnycallClient: mismatch dest client"
+        );
+        require(
+            tokenPeers[srcToken][toChainId] == dstToken,
+            "AnycallClient: mismatch dest token"
+        );
 
         if (IERC20(srcToken).balanceOf(address(this)) >= amount) {
             IERC20(srcToken).safeTransferFrom(address(this), from, amount);
         } else {
-            IAaveV3Pool(aaveV3Pool).mintUnbacked(srcToken, amount, from, referralCode);
+            IAaveV3Pool(aaveV3Pool).mintUnbacked(
+                srcToken,
+                amount,
+                from,
+                referralCode
+            );
         }
 
         emit LogCalloutFail(srcToken, from, receiver, amount, toChainId);

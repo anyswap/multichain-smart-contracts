@@ -10,17 +10,27 @@ import "../../access/PausableControlWithAdmin.sol";
 /// bottom level is the `AnycallProxy` which complete the cross-chain interaction
 
 interface IApp {
-    function anyExecute(bytes calldata _data) external returns (bool success, bytes memory result);
+    function anyExecute(bytes calldata _data)
+        external
+        returns (bool success, bytes memory result);
 }
 
 interface IAnyswapToken {
     function mint(address to, uint256 amount) external returns (bool);
 
     function burn(address from, uint256 amount) external returns (bool);
+
+    function withdraw(uint256 amount, address to) external returns (uint256);
 }
 
 interface IAnycallExecutor {
-    function context() external returns (address from, uint256 fromChainID, uint256 nonce);
+    function context()
+        external
+        returns (
+            address from,
+            uint256 fromChainID,
+            uint256 nonce
+        );
 }
 
 interface IAnycallV6Proxy {
@@ -47,14 +57,19 @@ abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
         _;
     }
 
-    constructor(address _admin, address _callProxy) PausableControlWithAdmin(_admin) {
+    constructor(address _admin, address _callProxy)
+        PausableControlWithAdmin(_admin)
+    {
         require(_callProxy != address(0));
         callProxy = _callProxy;
         executor = IAnycallV6Proxy(callProxy).executor();
     }
 
     receive() external payable {
-        require(msg.sender == callProxy, "AnycallClient: receive from forbidden sender");
+        require(
+            msg.sender == callProxy,
+            "AnycallClient: receive from forbidden sender"
+        );
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
@@ -78,31 +93,40 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
     using SafeERC20 for IERC20;
 
     // pausable control roles
-    bytes32 public constant PAUSE_SWAPOUT_ROLE = keccak256("PAUSE_SWAPOUT_ROLE");
+    bytes32 public constant PAUSE_SWAPOUT_ROLE =
+        keccak256("PAUSE_SWAPOUT_ROLE");
     bytes32 public constant PAUSE_SWAPIN_ROLE = keccak256("PAUSE_SWAPIN_ROLE");
-    bytes32 public constant PAUSE_FALLBACK_ROLE = keccak256("PAUSE_FALLBACK_ROLE");
+    bytes32 public constant PAUSE_FALLBACK_ROLE =
+        keccak256("PAUSE_FALLBACK_ROLE");
 
     // associated tokens on each chain
     mapping(address => mapping(uint256 => address)) public tokenPeers;
 
     event LogSwapout(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 toChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 toChainId
     );
     event LogSwapin(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 fromChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 fromChainId
     );
     event LogSwapoutFail(
-        address indexed token, address indexed sender, address indexed receiver,
-        uint256 amount, uint256 toChainId
+        address indexed token,
+        address indexed sender,
+        address indexed receiver,
+        uint256 amount,
+        uint256 toChainId
     );
 
-    constructor(
-        address _admin,
-        address _callProxy
-    ) AnycallClientBase(_admin, _callProxy) {
-    }
+    constructor(address _admin, address _callProxy)
+        AnycallClientBase(_admin, _callProxy)
+    {}
 
     function setTokenPeers(
         address srcToken,
@@ -136,15 +160,19 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
 
         address _underlying = _getUnderlying(token);
 
-        if (_underlying != address(0)) {
+        if (
+            _underlying != address(0) &&
+            IERC20(token).balanceOf(msg.sender) < amount
+        ) {
             uint256 old_balance = IERC20(_underlying).balanceOf(token);
-
             IERC20(_underlying).safeTransferFrom(msg.sender, token, amount);
-
             uint256 new_balance = IERC20(_underlying).balanceOf(token);
-
+            require(
+                new_balance >= old_balance &&
+                    new_balance <= old_balance + amount
+            );
             // update amount to real balance increasement (some token may deduct fees)
-            amount = new_balance > old_balance ? new_balance - old_balance : 0;
+            amount = new_balance - old_balance;
         } else {
             assert(IAnyswapToken(token).burn(msg.sender, amount));
         }
@@ -170,7 +198,9 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             uint256 newCoinBalance = address(this).balance;
             if (newCoinBalance > oldCoinBalance) {
                 // return remaining fees
-                (bool success,) = msg.sender.call{value: newCoinBalance - oldCoinBalance}("");
+                (bool success, ) = msg.sender.call{
+                    value: newCoinBalance - oldCoinBalance
+                }("");
                 require(success);
             }
         }
@@ -193,28 +223,43 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
                 address dstToken,
                 uint256 amount,
                 address sender,
-                address receiver,
-                //uint256 toChainId
-            ) = abi.decode(
-                data[4:],
-                (address, address, uint256, address, address, uint256)
-            );
+                address receiver, //uint256 toChainId
 
-            (address from, uint256 fromChainId,) = IAnycallExecutor(executor).context();
-            require(clientPeers[fromChainId] == from, "AnycallClient: wrong context");
-            require(tokenPeers[dstToken][fromChainId] == srcToken, "AnycallClient: mismatch source token");
+            ) = abi.decode(
+                    data[4:],
+                    (address, address, uint256, address, address, uint256)
+                );
+
+            (address from, uint256 fromChainId, ) = IAnycallExecutor(executor)
+                .context();
+            require(
+                clientPeers[fromChainId] == from,
+                "AnycallClient: wrong context"
+            );
+            require(
+                tokenPeers[dstToken][fromChainId] == srcToken,
+                "AnycallClient: mismatch source token"
+            );
 
             address _underlying = _getUnderlying(dstToken);
 
-            if (_underlying != address(0) && (IERC20(dstToken).balanceOf(address(this)) >= amount)) {
-                IERC20(dstToken).safeTransferFrom(address(this), receiver, amount);
+            if (
+                _underlying != address(0) &&
+                (IERC20(_underlying).balanceOf(dstToken) >= amount)
+            ) {
+                IAnyswapToken(dstToken).mint(address(this), amount);
+                IAnyswapToken(dstToken).withdraw(amount, receiver);
             } else {
                 assert(IAnyswapToken(dstToken).mint(receiver, amount));
             }
 
             emit LogSwapin(dstToken, sender, receiver, amount, fromChainId);
-        } else if (selector == 0xa35fe8bf) { // bytes4(keccak256('anyFallback(address,bytes)'))
-            (address _to, bytes memory _data) = abi.decode(data[4:], (address, bytes));
+        } else if (selector == 0xa35fe8bf) {
+            // bytes4(keccak256('anyFallback(address,bytes)'))
+            (address _to, bytes memory _data) = abi.decode(
+                data[4:],
+                (address, bytes)
+            );
             anyFallback(_to, _data);
         } else {
             return (false, "unknown selector");
@@ -227,7 +272,7 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
         internal
         whenNotPaused(PAUSE_FALLBACK_ROLE)
     {
-        (address _from,,) = IAnycallExecutor(executor).context();
+        (address _from, , ) = IAnycallExecutor(executor).context();
         require(_from == address(this), "AnycallClient: wrong context");
 
         (
@@ -239,17 +284,29 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
             address receiver,
             uint256 toChainId
         ) = abi.decode(
-            data,
-            (bytes4, address, address, uint256, address, address, uint256)
-        );
+                data,
+                (bytes4, address, address, uint256, address, address, uint256)
+            );
 
-        require(selector == this.anyExecute.selector, "AnycallClient: wrong fallback data");
-        require(clientPeers[toChainId] == to, "AnycallClient: mismatch dest client");
-        require(tokenPeers[srcToken][toChainId] == dstToken, "AnycallClient: mismatch dest token");
+        require(
+            selector == this.anyExecute.selector,
+            "AnycallClient: wrong fallback data"
+        );
+        require(
+            clientPeers[toChainId] == to,
+            "AnycallClient: mismatch dest client"
+        );
+        require(
+            tokenPeers[srcToken][toChainId] == dstToken,
+            "AnycallClient: mismatch dest token"
+        );
 
         address _underlying = _getUnderlying(srcToken);
 
-        if (_underlying != address(0) && (IERC20(srcToken).balanceOf(address(this)) >= amount)) {
+        if (
+            _underlying != address(0) &&
+            (IERC20(srcToken).balanceOf(address(this)) >= amount)
+        ) {
             IERC20(_underlying).safeTransferFrom(address(this), from, amount);
         } else {
             assert(IAnyswapToken(srcToken).mint(from, amount));
@@ -259,9 +316,11 @@ contract AnyswapTokenAnycallClient is AnycallClientBase {
     }
 
     function _getUnderlying(address token) internal returns (address) {
-        (bool success, bytes memory returndata) = token.call(abi.encodeWithSelector(0x6f307dc3));
+        (bool success, bytes memory returndata) = token.call(
+            abi.encodeWithSelector(0x6f307dc3)
+        );
         if (success && returndata.length > 0) {
-            (address _underlying) = abi.decode(returndata, (address));
+            address _underlying = abi.decode(returndata, (address));
             return _underlying;
         }
         return address(0);
