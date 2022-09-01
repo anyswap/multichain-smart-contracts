@@ -29,6 +29,7 @@ contract MultichainV7Router is
         keccak256("Swapout_Paused_ROLE");
     bytes32 public constant Call_Paused_ROLE = keccak256("Call_Paused_ROLE");
     bytes32 public constant Exec_Paused_ROLE = keccak256("Exec_Paused_ROLE");
+    bytes32 public constant Retry_Paused_ROLE = keccak256("Retry_Paused_ROLE");
 
     address public immutable wNATIVE;
     address public immutable anycallExecutor;
@@ -41,7 +42,7 @@ contract MultichainV7Router is
     }
 
     mapping(address => ProxyInfo) public anycallProxyInfo;
-    mapping(bytes32 => bool) public retryRecords;
+    mapping(bytes32 => bytes32) public retryRecords; // retryHash -> dataHash
 
     event LogAnySwapIn(
         string swapID,
@@ -614,7 +615,7 @@ contract MultichainV7Router is
                         data
                     )
                 );
-                retryRecords[retryHash] = true;
+                retryRecords[retryHash] = keccak256(abi.encode(swapID, data));
                 emit LogRetryExecRecord(
                     swapID,
                     swapInfo.swapoutID,
@@ -665,7 +666,7 @@ contract MultichainV7Router is
         address anycallProxy,
         bytes calldata data,
         bool dontExec
-    ) external nonReentrant {
+    ) external whenNotPaused(Retry_Paused_ROLE) nonReentrant {
         require(msg.sender == swapInfo.receiver, "forbid retry swap");
         require(
             IRouterSecurity(routerSecurity).isSwapCompleted(
@@ -675,20 +676,26 @@ contract MultichainV7Router is
             ),
             "swap not completed"
         );
-        bytes32 retryHash = keccak256(
-            abi.encode(
-                swapID,
-                swapInfo.swapoutID,
-                swapInfo.token,
-                swapInfo.receiver,
-                swapInfo.amount,
-                swapInfo.fromChainID,
-                anycallProxy,
-                data
-            )
-        );
-        require(retryRecords[retryHash], "retry record not exist");
-        retryRecords[retryHash] = false;
+
+        {
+            bytes32 retryHash = keccak256(
+                abi.encode(
+                    swapID,
+                    swapInfo.swapoutID,
+                    swapInfo.token,
+                    swapInfo.receiver,
+                    swapInfo.amount,
+                    swapInfo.fromChainID,
+                    anycallProxy,
+                    data
+                )
+            );
+            require(
+                retryRecords[retryHash] == keccak256(abi.encode(swapID, data)),
+                "retry record not exist"
+            );
+            delete retryRecords[retryHash];
+        }
 
         address _underlying = IUnderlying(swapInfo.token).underlying();
         require(_underlying != address(0), "MultichainRouter: zero underlying");
