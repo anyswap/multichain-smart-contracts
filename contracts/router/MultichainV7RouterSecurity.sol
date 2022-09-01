@@ -70,8 +70,13 @@ contract MultichainV7RouterSecurity is IRouterSecurity, RoleControl {
         uint256 fromChainID
     ) {
         require(
-            !this.isSwapCompleted(swapID, swapoutID, fromChainID),
-            "swap is completed"
+            !completedSwapin[swapID] || paused(Pause_Check_SwapID_Completion),
+            "swapID is completed"
+        );
+        require(
+            !completedSwapoutID[swapoutID][fromChainID] ||
+                paused(Pause_Check_SwapoutID_Completion),
+            "swapoutID is completed"
         );
         _;
     }
@@ -88,10 +93,8 @@ contract MultichainV7RouterSecurity is IRouterSecurity, RoleControl {
         uint256 fromChainID
     ) external view returns (bool) {
         return
-            (completedSwapin[swapID] &&
-                !paused(Pause_Check_SwapID_Completion)) ||
-            (completedSwapoutID[swapoutID][fromChainID] &&
-                !paused(Pause_Check_SwapoutID_Completion));
+            completedSwapin[swapID] ||
+            completedSwapoutID[swapoutID][fromChainID];
     }
 
     function registerSwapin(string calldata swapID, SwapInfo calldata swapInfo)
