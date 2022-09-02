@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.10;
 
-import "../access/MPCManageable.sol";
-import "../access/PausableControlWithAdmin.sol";
-import "./interfaces/IRouterSecurity.sol";
+import "../../access/MPCManageable.sol";
+import "../../access/PausableControlWithAdmin.sol";
+import "../interfaces/IRouterSecurity.sol";
 
 abstract contract RoleControl is MPCManageable, PausableControlWithAdmin {
     mapping(address => bool) public isSupportedCaller;

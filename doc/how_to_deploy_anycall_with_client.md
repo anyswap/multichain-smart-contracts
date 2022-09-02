@@ -13,8 +13,6 @@ contracts/
 │   ├── └── AaveV3PoolAnycallClient.sol
 │   └── client-v6
 │       └── AaveV3PoolAnycallClient.sol
-└── common
-    └── UpgradableProxy.sol
 ```
 
 ## 1. delpoy `AnyswapCallProxy` same as normal anycall deployment
@@ -50,14 +48,14 @@ when `_mode` is flag bits.
     uint256 public constant FREE_MODE = 0x1 << 1;
 ```
 
-Notation:  
-the client app should set authorization to allow anyswap callproxy to call into their app.  
-for v5, set authorization to `AnyswapV5CallProxy`  
+Notation:
+the client app should set authorization to allow anyswap callproxy to call into their app.
+for v5, set authorization to `AnyswapV5CallProxy`
 for v6, set authorization to `AnyswapV6CallProxy.executor`
 
-## 2. deploy `AaveV3PoolAnycallClient` as upgradable
+## 2. deploy `AaveV3PoolAnycallClient`
 
-### 2.1 deploy `AaveV3PoolAnycallClient` in `AaveV3PoolAnycallClient.sol`
+## 2.1 deploy `AaveV3PoolAnycallClient` in `AaveV3PoolAnycallClient.sol`
 
 ```text
     constructor(
@@ -71,21 +69,7 @@ for v6, set authorization to `AnyswapV6CallProxy.executor`
 where `_callProxy` is the `AnyswapV5CallProxy` contract address,
 and `_aaveV3Pool` is the aave v3 pool contract address.
 
-### 2.2 deploy `AnycallClientProxy` in `UpgradableProxy.sol`
-
-```text
-    constructor(address _proxyTo)
-```
-
-set `_proxyTo` to the contract address deployed in step 2.1
-
-the the aave v3 pool contract should give `Bridge Role`
-to this `AnycallClientProxy` contract address.
-
-we can call `updateImplementation` of `AnycallClientProxy` to
-update the implementation if we want to upgrage `AaveV3PoolAnycallClient`.
-
-### 2.3 setting `AaveV3PoolAnycallClient`
+### 2.2 setting `AaveV3PoolAnycallClient`
 
 set client peers, a client have a client perr on each blockchain,
 and each peer is an `AaveV3PoolAnycallClient` contract on each blockchain.

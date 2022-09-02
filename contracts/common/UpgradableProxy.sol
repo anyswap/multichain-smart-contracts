@@ -27,28 +27,35 @@ abstract contract Proxy is IProxy {
             // revert instead of invalid() bc if the underlying call failed with invalid() it already wasted gas.
             // if the call returned error data, forward it
             switch result
-                case 0 {
-                    revert(ptr, size)
-                }
-                default {
-                    return(ptr, size)
-                }
+            case 0 {
+                revert(ptr, size)
+            }
+            default {
+                return(ptr, size)
+            }
         }
     }
 
-    function proxyType() external virtual override pure returns (uint256 proxyTypeId) {
+    function proxyType()
+        external
+        pure
+        virtual
+        override
+        returns (uint256 proxyTypeId)
+    {
         // Upgradeable proxy
         proxyTypeId = 2;
     }
 
-    function implementation() external virtual override view returns (address);
+    function implementation() external view virtual override returns (address);
 }
 
 contract UpgradableProxy is Proxy {
     event ProxyUpdated(address indexed _new, address indexed _old);
     event ProxyOwnerUpdate(address _new, address _old);
 
-    bytes32 constant IMPLEMENTATION_SLOT = keccak256("multichain.proxy.implementation");
+    bytes32 constant IMPLEMENTATION_SLOT =
+        keccak256("multichain.proxy.implementation");
     bytes32 constant OWNER_SLOT = keccak256("multichain.proxy.owner");
 
     constructor(address _proxyTo) {
@@ -73,11 +80,11 @@ contract UpgradableProxy is Proxy {
         _;
     }
 
-    function proxyOwner() external view returns(address) {
+    function proxyOwner() external view returns (address) {
         return loadProxyOwner();
     }
 
-    function loadProxyOwner() internal view returns(address) {
+    function loadProxyOwner() internal view returns (address) {
         address _owner;
         bytes32 position = OWNER_SLOT;
         assembly {
@@ -86,11 +93,11 @@ contract UpgradableProxy is Proxy {
         return _owner;
     }
 
-    function implementation() external override view returns (address) {
+    function implementation() external view override returns (address) {
         return loadImplementation();
     }
 
-    function loadImplementation() internal view returns(address) {
+    function loadImplementation() internal view returns (address) {
         address _impl;
         bytes32 position = IMPLEMENTATION_SLOT;
         assembly {
@@ -114,17 +121,26 @@ contract UpgradableProxy is Proxy {
 
     function updateImplementation(address _newProxyTo) public onlyProxyOwner {
         require(_newProxyTo != address(0x0), "INVALID_PROXY_ADDRESS");
-        require(isContract(_newProxyTo), "DESTINATION_ADDRESS_IS_NOT_A_CONTRACT");
+        require(
+            isContract(_newProxyTo),
+            "DESTINATION_ADDRESS_IS_NOT_A_CONTRACT"
+        );
 
         emit ProxyUpdated(_newProxyTo, loadImplementation());
 
         setImplementation(_newProxyTo);
     }
 
-    function updateAndCall(address _newProxyTo, bytes memory data) external payable onlyProxyOwner {
+    function updateAndCall(address _newProxyTo, bytes memory data)
+        external
+        payable
+        onlyProxyOwner
+    {
         updateImplementation(_newProxyTo);
 
-        (bool success, bytes memory returnData) = address(this).call{value: msg.value}(data);
+        (bool success, bytes memory returnData) = address(this).call{
+            value: msg.value
+        }(data);
         require(success, string(returnData));
     }
 
@@ -142,8 +158,4 @@ contract UpgradableProxy is Proxy {
 
         return _target.code.length > 0;
     }
-}
-
-contract AnycallClientProxy is UpgradableProxy {
-    constructor(address _proxyTo) UpgradableProxy(_proxyTo) {}
 }

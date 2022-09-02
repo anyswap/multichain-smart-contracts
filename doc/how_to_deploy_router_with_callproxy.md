@@ -44,6 +44,24 @@ function removeSupportedCaller(address caller) external
 function isSupportedCaller(address caller) external view returns (bool)
 ```
 
+**Note: we can deploy an upgradeable router security contract by the following way:**
+
+1. deploy `MultichainV7RouterSecurityUpgradeable`
+2. deploy `MultichainV7RouterSecurityProxy`
+
+    ```solidity
+    constructor(address _roterSecurityUpgradeable)
+    ```
+
+    the `_roterSecurityUpgradeable` argument is the contract address of `MultichainV7RouterSecurityUpgradeable` deployed in the above step
+3. call `MultichainV7RouterSecurityProxy::initialize`
+
+    ```solidity
+    function initialize(address _admin, address _mpc) external
+    ```
+
+and now we can use `MultichainV7RouterSecurityProxy` as `MultichainV7RouterSecurity`, for example, call `addSupportedCaller` to add whitelist caller, etc.
+
 ## 1. deploy `MultichainV7Router` in `MultichainV7Router.sol`
 
 ```solidity
