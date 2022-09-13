@@ -152,10 +152,6 @@ contract UpgradableProxy is Proxy {
     }
 
     function isContract(address _target) internal view returns (bool) {
-        if (_target == address(0)) {
-            return false;
-        }
-
         return _target.code.length > 0;
     }
 }

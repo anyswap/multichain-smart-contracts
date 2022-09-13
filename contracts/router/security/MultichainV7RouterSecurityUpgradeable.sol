@@ -378,6 +378,7 @@ abstract contract AdminControl {
     function _initializeAdmin(address _admin) internal {
         require(_admin != address(0), "AdminControl: address(0)");
         admin = _admin;
+        emit ChangeAdmin(address(0), admin);
     }
 
     modifier onlyAdmin() {

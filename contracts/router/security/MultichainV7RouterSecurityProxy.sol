@@ -2,10 +2,12 @@
 
 pragma solidity ^0.8.10;
 
-import "../../common/UpgradableProxy.sol";
+import "../../common/TransparentUpgradeableProxy.sol";
 
-contract MultichainV7RouterSecurityProxy is UpgradableProxy {
-    constructor(address _roterSecurityUpgradeable)
-        UpgradableProxy(_roterSecurityUpgradeable)
-    {}
+contract MultichainV7RouterSecurityProxy is TransparentUpgradeableProxy {
+    constructor(
+        address _roterSecurity,
+        address admin_,
+        bytes memory _data
+    ) payable TransparentUpgradeableProxy(_roterSecurity, admin_, _data) {}
 }
