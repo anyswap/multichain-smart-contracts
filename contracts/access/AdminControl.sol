@@ -12,6 +12,7 @@ abstract contract AdminControl {
     constructor(address _admin) {
         require(_admin != address(0), "AdminControl: address(0)");
         admin = _admin;
+        emit ChangeAdmin(address(0), _admin);
     }
 
     modifier onlyAdmin() {
@@ -32,4 +33,3 @@ abstract contract AdminControl {
         pendingAdmin = address(0);
     }
 }
-

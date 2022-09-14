@@ -16,7 +16,7 @@ contract AnycallExecutor is IAnycallExecutor, MPCAdminsControl {
         _;
     }
 
-    constructor(address _mpc) MPCAdminsControl(_mpc) {}
+    constructor(address _admin, address _mpc) MPCAdminsControl(_admin, _mpc) {}
 
     function isAuthCaller(address _caller) external view returns (bool) {
         return authCallers.contains(_caller);

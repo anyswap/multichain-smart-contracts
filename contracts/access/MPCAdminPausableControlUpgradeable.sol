@@ -3,6 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./PausableControl.sol";
 
 abstract contract MPCManageable {
     address public mpc;
@@ -27,7 +28,7 @@ abstract contract MPCManageable {
         uint256 applyTime
     );
 
-    constructor(address _mpc) {
+    function _initializeMPC(address _mpc) internal {
         require(_mpc != address(0), "MPC: mpc is the zero address");
         mpc = _mpc;
         emit LogChangeMPC(address(0), mpc, block.timestamp);
@@ -54,5 +55,40 @@ abstract contract MPCManageable {
         mpc = pendingMPC;
         pendingMPC = address(0);
         delayMPC = 0;
+    }
+}
+
+// a basic control for a mpc and an admin
+abstract contract MPCAdminControl is MPCManageable {
+    address public admin;
+
+    event ChangeAdmin(address indexed _old, address indexed _new);
+
+    function _initializeAdmin(address _admin) internal {
+        admin = _admin;
+        emit ChangeAdmin(address(0), _admin);
+    }
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "MPCAdminControl: not admin");
+        _;
+    }
+
+    function changeAdmin(address _admin) external onlyMPC {
+        emit ChangeAdmin(admin, _admin);
+        admin = _admin;
+    }
+}
+
+abstract contract MPCAdminPausableControlUpgradeable is
+    MPCAdminControl,
+    PausableControl
+{
+    function pause(bytes32 role) external onlyAdmin {
+        _pause(role);
+    }
+
+    function unpause(bytes32 role) external onlyAdmin {
+        _unpause(role);
     }
 }

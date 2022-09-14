@@ -2,11 +2,10 @@
 
 pragma solidity ^0.8.10;
 
-import "../../access/MPCManageable.sol";
-import "../../access/PausableControlWithAdmin.sol";
+import "../../access/MPCAdminPausableControl.sol";
 import "../interfaces/IRouterSecurity.sol";
 
-abstract contract RoleControl is MPCManageable, PausableControlWithAdmin {
+abstract contract RoleControl is MPCAdminPausableControl {
     mapping(address => bool) public isSupportedCaller;
     address[] public supportedCallers;
 
@@ -16,21 +15,20 @@ abstract contract RoleControl is MPCManageable, PausableControlWithAdmin {
     }
 
     constructor(address _admin, address _mpc)
-        MPCManageable(_mpc)
-        PausableControlWithAdmin(_admin)
+        MPCAdminPausableControl(_admin, _mpc)
     {}
 
     function getAllSupportedCallers() external view returns (address[] memory) {
         return supportedCallers;
     }
 
-    function addSupportedCaller(address caller) external onlyMPC {
+    function addSupportedCaller(address caller) external onlyAdmin {
         require(!isSupportedCaller[caller]);
         isSupportedCaller[caller] = true;
         supportedCallers.push(caller);
     }
 
-    function removeSupportedCaller(address caller) external onlyMPC {
+    function removeSupportedCaller(address caller) external onlyAdmin {
         require(isSupportedCaller[caller]);
         isSupportedCaller[caller] = false;
         uint256 length = supportedCallers.length;

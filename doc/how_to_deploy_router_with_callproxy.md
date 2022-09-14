@@ -23,7 +23,7 @@ we can change the orders and setting to complete the same job.
 `AnycallExecutor` is the delegator to execute contract calling (like a sandbox) to enfore security.
 
 ```solidity
-constructor(address _mpc)
+constructor(address _admin, address _mpc)
 
 function addAuthCallers(address[] calldata _callers) external
 function removeAuthCallers(address[] calldata _callers) external
