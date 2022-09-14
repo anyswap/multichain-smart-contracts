@@ -4,8 +4,6 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AnycallProxyBase.sol";
-import "../interfaces/IRetrySwapinAndExec.sol";
-import "../interfaces/IUnderlying.sol";
 
 interface ICurveAave {
     function coins(uint256 index) external view returns (address);
@@ -42,7 +40,7 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         uint256 min_dy;
     }
 
-    event ExecFailed(address indexed token, uint256 amount, bytes data);
+    event ExecFailed();
 
     constructor(
         address _mpc,
@@ -86,28 +84,35 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
     // Note: take care of the situation when do the business failed.
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
-        AnycallInfo memory info = decode_anycall_info(data);
-        try this.execExchange(token, amount, info) returns (
+        try this.execExchange(token, amount, data) returns (
             bool succ,
             bytes memory res
         ) {
             (success, result) = (succ, res);
-        } catch {
+        } catch Error(string memory reason) {
+            result = bytes(reason);
+        } catch (bytes memory reason) {
+            result = reason;
+        }
+        if (!success) {
             // process failure situation (eg. return token)
-            IERC20(token).safeTransfer(info.receiver, amount);
-            emit ExecFailed(token, amount, data);
+            IERC20(token).safeTransfer(receiver, amount);
+            emit ExecFailed();
         }
     }
 
     function execExchange(
         address token,
         uint256 amount,
-        AnycallInfo calldata info
+        bytes calldata data
     ) external returns (bool success, bytes memory result) {
         require(msg.sender == address(this));
+        AnycallInfo memory info = decode_anycall_info(data);
+
         require(info.deadline >= block.timestamp, "AnycallProxy: expired");
         require(supportedPool[info.pool], "AnycallProxy: unsupported pool");
         require(info.receiver != address(0), "AnycallProxy: zero receiver");
@@ -146,41 +151,9 @@ contract AnycallProxy_CurveAave is AnycallProxyBase {
         return (true, abi.encode(recvToken, recvAmount));
     }
 
-    function retrySwapinAndExec(
-        address router,
-        string calldata swapID,
-        SwapInfo calldata swapInfo,
-        bytes calldata data,
-        bool dontExec
-    ) external {
-        require(supportedCaller[router], "unsupported router");
-        AnycallInfo memory info = decode_anycall_info(data);
-        require(msg.sender == info.receiver, "forbid call retry");
-
-        address _underlying = IUnderlying(swapInfo.token).underlying();
-        require(_underlying != address(0), "zero underlying");
-        uint256 old_balance = IERC20(_underlying).balanceOf(address(this));
-
-        IRetrySwapinAndExec(router).retrySwapinAndExec(
-            swapID,
-            swapInfo,
-            address(this),
-            data,
-            dontExec
-        );
-
-        if (dontExec) {
-            // process don't exec situation (eg. return token)
-            uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
-            require(
-                new_balance >= old_balance &&
-                    new_balance <= old_balance + swapInfo.amount,
-                "balance check failed"
-            );
-            IERC20(_underlying).safeTransfer(
-                info.receiver,
-                new_balance - old_balance
-            );
-        }
+    // this contract is designed as a handler (not token pool)
+    // it should have no token balance, but if it has we can withdraw them
+    function skim(address token, address to) external onlyMPC {
+        IERC20(token).safeTransfer(to, IERC20(token).balanceOf(address(this)));
     }
 }

@@ -182,7 +182,8 @@ contract MultichainV7Router is
         emit LogAnySwapOut(swapoutID, token, msg.sender, to, amount, toChainID);
     }
 
-    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
+    // Swaps `amount` `token` from this chain to `toChainID` chain and call anycall proxy with `data`
+    // `to` is the fallback receive address when exec failed on the `destination` chain
     function anySwapOutAndCall(
         address token,
         string calldata to,
@@ -262,7 +263,8 @@ contract MultichainV7Router is
         );
     }
 
-    // Swaps `amount` `token` from this chain to `toChainID` chain with recipient `to` by minting with `underlying` and call anycall proxy with `data`
+    // Swaps `amount` `token` from this chain to `toChainID` chain and call anycall proxy with `data`
+    // `to` is the fallback receive address when exec failed on the `destination` chain
     function anySwapOutUnderlyingAndCall(
         address token,
         string calldata to,
@@ -340,7 +342,8 @@ contract MultichainV7Router is
         );
     }
 
-    // Swaps `msg.value` `Native` from this chain to `toChainID` chain with recipient `to` and call anycall proxy with `data`
+    // Swaps `msg.value` `Native` from this chain to `toChainID` chain and call anycall proxy with `data`
+    // `to` is the fallback receive address when exec failed on the `destination` chain
     function anySwapOutNativeAndCall(
         address token,
         string calldata to,
@@ -521,10 +524,7 @@ contract MultichainV7Router is
         IRouterSecurity(routerSecurity).registerSwapin(swapID, swapInfo);
 
         assert(
-            IRouterMintBurn(swapInfo.token).mint(
-                swapInfo.receiver,
-                swapInfo.amount
-            )
+            IRouterMintBurn(swapInfo.token).mint(anycallProxy, swapInfo.amount)
         );
 
         bool success;
@@ -533,6 +533,7 @@ contract MultichainV7Router is
             IAnycallExecutor(anycallExecutor).execute(
                 anycallProxy,
                 swapInfo.token,
+                swapInfo.receiver,
                 swapInfo.amount,
                 data
             )
@@ -592,13 +593,13 @@ contract MultichainV7Router is
                 );
                 IUnderlying(swapInfo.token).withdraw(
                     swapInfo.amount,
-                    swapInfo.receiver
+                    anycallProxy
                 );
             } else if (anycallProxyInfo[anycallProxy].acceptAnyToken) {
                 receiveToken = swapInfo.token;
                 assert(
                     IRouterMintBurn(swapInfo.token).mint(
-                        swapInfo.receiver,
+                        anycallProxy,
                         swapInfo.amount
                     )
                 );
@@ -636,6 +637,7 @@ contract MultichainV7Router is
             IAnycallExecutor(anycallExecutor).execute(
                 anycallProxy,
                 receiveToken,
+                swapInfo.receiver,
                 swapInfo.amount,
                 data
             )
@@ -655,10 +657,9 @@ contract MultichainV7Router is
         );
     }
 
-    // should be called only by the `receiver`
+    // should be called only by the `receiver` or `admin`
     // @param dontExec
     // if `true` transfer the underlying token to the `receiver`,
-    //      and the `receiver` should complete the left job.
     // if `false` retry swapin and execute in normal way.
     function retrySwapinAndExec(
         string calldata swapID,
@@ -667,7 +668,10 @@ contract MultichainV7Router is
         bytes calldata data,
         bool dontExec
     ) external whenNotPaused(Retry_Paused_ROLE) nonReentrant {
-        require(msg.sender == swapInfo.receiver, "forbid retry swap");
+        require(
+            msg.sender == swapInfo.receiver || msg.sender == admin,
+            "forbid retry swap"
+        );
         require(
             IRouterSecurity(routerSecurity).isSwapCompleted(
                 swapID,
@@ -706,19 +710,22 @@ contract MultichainV7Router is
         assert(
             IRouterMintBurn(swapInfo.token).mint(address(this), swapInfo.amount)
         );
-        IUnderlying(swapInfo.token).withdraw(
-            swapInfo.amount,
-            swapInfo.receiver
-        );
 
         bool success;
         bytes memory result;
 
-        if (!dontExec) {
+        if (dontExec) {
+            IUnderlying(swapInfo.token).withdraw(
+                swapInfo.amount,
+                swapInfo.receiver
+            );
+        } else {
+            IUnderlying(swapInfo.token).withdraw(swapInfo.amount, anycallProxy);
             try
                 IAnycallExecutor(anycallExecutor).execute(
                     anycallProxy,
                     _underlying,
+                    swapInfo.receiver,
                     swapInfo.amount,
                     data
                 )

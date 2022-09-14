@@ -4,8 +4,6 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AnycallProxyBase.sol";
-import "../interfaces/IRetrySwapinAndExec.sol";
-import "../interfaces/IUnderlying.sol";
 import "../interfaces/IwNATIVE.sol";
 
 library SafeMathSushiswap {
@@ -185,7 +183,7 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         address indexed receiver,
         uint256 amount
     );
-    event ExecFailed(address indexed token, uint256 amount, bytes data);
+    event ExecFailed();
 
     constructor(
         address mpc_,
@@ -233,28 +231,34 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
     // Note: take care of the situation when do the business failed.
     function exec(
         address token,
+        address receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
-        AnycallInfo memory anycallInfo = decode_anycall_info(data);
-        try this.execSwap(token, amount, anycallInfo) returns (
+        try this.execSwap(token, amount, data) returns (
             bool succ,
             bytes memory res
         ) {
             (success, result) = (succ, res);
-        } catch {
+        } catch Error(string memory reason) {
+            result = bytes(reason);
+        } catch (bytes memory reason) {
+            result = reason;
+        }
+        if (!success) {
             // process failure situation (eg. return token)
-            IERC20(token).safeTransfer(anycallInfo.receiver, amount);
-            emit ExecFailed(token, amount, data);
+            IERC20(token).safeTransfer(receiver, amount);
+            emit ExecFailed();
         }
     }
 
     function execSwap(
         address token,
         uint256 amount,
-        AnycallInfo calldata anycallInfo
+        bytes calldata data
     ) external returns (bool success, bytes memory result) {
         require(msg.sender == address(this));
+        AnycallInfo memory anycallInfo = decode_anycall_info(data);
         require(
             anycallInfo.deadline >= block.timestamp,
             "SushiSwapAnycallProxy: EXPIRED"
@@ -306,9 +310,10 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         }
         emit TokenSwap(recvToken, receiver, recvAmount);
 
-        if (amount.sub(amounts[0]) > 0) {
-            IERC20(path[0]).safeTransfer(receiver, amount.sub(amounts[0]));
-            emit TokenBack(token, receiver, amount.sub(amounts[0]));
+        uint256 leftAmount = amount.sub(amounts[0]);
+        if (leftAmount > 0) {
+            IERC20(path[0]).safeTransfer(receiver, leftAmount);
+            emit TokenBack(token, receiver, leftAmount);
         }
 
         return (true, abi.encode(recvToken, recvAmount));
@@ -345,43 +350,6 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
         );
     }
 
-    function retrySwapinAndExec(
-        address router,
-        string calldata swapID,
-        SwapInfo calldata swapInfo,
-        bytes calldata data,
-        bool dontExec
-    ) external {
-        require(supportedCaller[router], "unsupported router");
-        AnycallInfo memory anycallInfo = decode_anycall_info(data);
-        require(msg.sender == anycallInfo.receiver, "forbid call retry");
-
-        address _underlying = IUnderlying(swapInfo.token).underlying();
-        require(_underlying != address(0), "zero underlying");
-        uint256 old_balance = IERC20(_underlying).balanceOf(address(this));
-
-        IRetrySwapinAndExec(router).retrySwapinAndExec(
-            swapID,
-            swapInfo,
-            address(this),
-            data,
-            dontExec
-        );
-        if (dontExec) {
-            // process don't exec situation (eg. return token)
-            uint256 new_balance = IERC20(_underlying).balanceOf(address(this));
-            require(
-                new_balance >= old_balance &&
-                    new_balance <= old_balance + swapInfo.amount,
-                "balance check failed"
-            );
-            IERC20(_underlying).safeTransfer(
-                anycallInfo.receiver,
-                new_balance - old_balance
-            );
-        }
-    }
-
     // **** SWAP ****
     // requires the initial amount to have already been sent to the first pair
     function _swap(
@@ -412,5 +380,11 @@ contract AnycallProxy_SushiSwap is AnycallProxyBase {
 
     receive() external payable {
         assert(msg.sender == wNATIVE); // only accept Native via fallback from the wNative contract
+    }
+
+    // this contract is designed as a handler (not token pool)
+    // it should have no token balance, but if it has we can withdraw them
+    function skim(address token, address to) external onlyMPC {
+        IERC20(token).safeTransfer(to, IERC20(token).balanceOf(address(this)));
     }
 }

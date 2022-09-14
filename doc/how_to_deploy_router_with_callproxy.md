@@ -50,11 +50,16 @@ function isSupportedCaller(address caller) external view returns (bool)
 2. deploy `MultichainV7RouterSecurityProxy`
 
     ```solidity
-    constructor(address _roterSecurityUpgradeable)
+    constructor(
+        address _roterSecurity,
+        address admin_,
+        bytes memory _data
+    )
     ```
 
-    the `_roterSecurityUpgradeable` argument is the contract address of `MultichainV7RouterSecurityUpgradeable` deployed in the above step
-3. call `MultichainV7RouterSecurityProxy::initialize`
+    the `_roterSecurity` argument is the contract address of `MultichainV7RouterSecurityUpgradeable` deployed in the above step
+    the `admin_` is the proxy administrator who can upgrade the proxy implementation.
+    the `_data` is the input data of calling `initialize` of `_roterSecurity` (starts with `0x485cc955`)
 
     ```solidity
     function initialize(address _admin, address _mpc) external
@@ -164,7 +169,7 @@ where,
 
 > `address token` is the anytoken contract address on the `source` chain
 >
-> `string to` is the receive address on the `destination` chain
+> `string to` is the fallback receive address when exec failed on the `destination` chain
 >
 > `uint256 amount` is the value transfered on the `source` chain
 >
@@ -173,13 +178,6 @@ where,
 > `string anycallProxy` is the call proxy contract on the `destination` chain to call into
 >
 > `bytes data` is the call data of calling the call proxy contract
-
-Note:
-> generally the `string to` is same as `string anycallProxy`.
->
-> they can be different either, for example to implement the following user case:
->
-> transfer token to `string to` address, and then call `string anycallProxy`, this case `string to` address acts like a separate vault address.
 
 ### 4.2 the mpc call a corresponding `swapin and exec` method
 
@@ -231,7 +229,8 @@ Note:
     )
     ```
 
-1. it can only be called by `swapInfo.receiver`
-2. id `dontExec` is `true`, transfer the `underlying token` to the `swapInfo.receiver`,
-   and the `swapInfo.receiver` should complete the left job (eg. return token).
+Note: `swapInfo.receiver` is the `fallback receive address` when exec failed.
+
+1. it can only be called by `swapInfo.receiver` or `admin`.
+2. if `dontExec` is `true`, transfer the `underlying token` to the `swapInfo.receiver`.
 3. if `dontExec` is `false`, retry swapin and execute as normal.
