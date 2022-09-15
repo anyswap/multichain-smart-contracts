@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import "./PausableControl.sol";
-import "./AdminControl.sol";
-
 pragma solidity ^0.8.10;
+
+import "./AdminControl.sol";
+import "./PausableControl.sol";
 
 abstract contract AdminPausableControl is AdminControl, PausableControl {
     constructor(address _admin) AdminControl(_admin) {}

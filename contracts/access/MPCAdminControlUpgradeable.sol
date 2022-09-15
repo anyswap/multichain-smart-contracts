@@ -2,14 +2,14 @@
 
 pragma solidity ^0.8.10;
 
-import "../access/MPCManageable.sol";
+import "../access/MPCManageableUpgradeable.sol";
 
-abstract contract MPCAdminControl is MPCManageable {
+abstract contract MPCAdminControlUpgradeable is MPCManageableUpgradeable {
     address public admin;
 
     event ChangeAdmin(address indexed _old, address indexed _new);
 
-    constructor(address _admin, address _mpc) MPCManageable(_mpc) {
+    function _initializeAdmin(address _admin) internal {
         admin = _admin;
         emit ChangeAdmin(address(0), _admin);
     }

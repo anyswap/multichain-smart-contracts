@@ -5,7 +5,6 @@ pragma solidity ^0.8.10;
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../access/MPCManageable.sol";
 
-// a basic control for a mpc and multiple admins
 abstract contract MPCAdminsControl is MPCManageable {
     using EnumerableSet for EnumerableSet.AddressSet;
     EnumerableSet.AddressSet private admins;
