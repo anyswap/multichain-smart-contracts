@@ -2,14 +2,19 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "../access/AdminControl.sol";
 import "./TransparentUpgradeableProxy.sol";
 
 /**
  * @dev This is an auxiliary contract meant to be assigned as the admin of a {TransparentUpgradeableProxy}. For an
  * explanation of why you would want to use this see the documentation for {TransparentUpgradeableProxy}.
  */
-contract ProxyAdmin is Ownable {
+contract ProxyAdmin is AdminControl {
+    /**
+     * @dev Initializes the contract setting the deployer as the initial admin.
+     */
+    constructor() AdminControl(msg.sender) {}
+
     /**
      * @dev Returns the current implementation of `proxy`.
      *
@@ -64,7 +69,7 @@ contract ProxyAdmin is Ownable {
     function changeProxyAdmin(
         TransparentUpgradeableProxy proxy,
         address newAdmin
-    ) public virtual onlyOwner {
+    ) public virtual onlyAdmin {
         proxy.changeProxyAdmin(newAdmin);
     }
 
@@ -78,7 +83,7 @@ contract ProxyAdmin is Ownable {
     function upgrade(TransparentUpgradeableProxy proxy, address implementation)
         public
         virtual
-        onlyOwner
+        onlyAdmin
     {
         proxy.upgradeTo(implementation);
     }
@@ -95,7 +100,7 @@ contract ProxyAdmin is Ownable {
         TransparentUpgradeableProxy proxy,
         address implementation,
         bytes memory data
-    ) public payable virtual onlyOwner {
+    ) public payable virtual onlyAdmin {
         proxy.upgradeToAndCall{value: msg.value}(implementation, data);
     }
 }
