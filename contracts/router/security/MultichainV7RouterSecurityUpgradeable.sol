@@ -48,8 +48,6 @@ contract MultichainV7RouterSecurity is IRouterSecurity, RoleControl {
     bytes32 public constant Pause_Check_SwapoutID_Completion =
         keccak256("Pause_Check_SwapoutID_Completion");
 
-    bool private initialized;
-
     mapping(string => bool) public completedSwapin;
     mapping(bytes32 => mapping(uint256 => bool)) public completedSwapoutID;
     mapping(bytes32 => uint256) public swapoutNonce;
@@ -78,15 +76,12 @@ contract MultichainV7RouterSecurity is IRouterSecurity, RoleControl {
     }
 
     constructor() {
-        initialized = true;
+        _disableInitializers();
     }
 
-    function initialize(address _admin, address _mpc) external {
-        require(!initialized, "initialized");
-        initialized = true;
-
-        _initializeAdmin(_admin);
-        _initializeMPC(_mpc);
+    function initialize(address _admin, address _mpc) external initializer {
+        __AdminControl_init(_admin);
+        __MPCManageable_init(_mpc);
     }
 
     function isSwapoutIDExist(bytes32 swapoutID) external view returns (bool) {

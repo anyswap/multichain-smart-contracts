@@ -2,7 +2,9 @@
 
 pragma solidity ^0.8.10;
 
-abstract contract MPCManageableUpgradeable {
+import "../common/Initializable.sol";
+
+abstract contract MPCManageableUpgradeable is Initializable {
     address public mpc;
     address public pendingMPC;
 
@@ -25,7 +27,7 @@ abstract contract MPCManageableUpgradeable {
         uint256 applyTime
     );
 
-    function _initializeMPC(address _mpc) internal {
+    function __MPCManageable_init(address _mpc) internal onlyInitializing {
         require(_mpc != address(0), "MPC: mpc is the zero address");
         mpc = _mpc;
         emit LogChangeMPC(address(0), mpc, block.timestamp);

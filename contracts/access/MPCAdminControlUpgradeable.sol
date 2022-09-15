@@ -9,7 +9,7 @@ abstract contract MPCAdminControlUpgradeable is MPCManageableUpgradeable {
 
     event ChangeAdmin(address indexed _old, address indexed _new);
 
-    function _initializeAdmin(address _admin) internal {
+    function __AdminControl_init(address _admin) internal onlyInitializing {
         admin = _admin;
         emit ChangeAdmin(address(0), _admin);
     }
