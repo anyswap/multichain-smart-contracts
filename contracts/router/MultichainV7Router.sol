@@ -4,8 +4,7 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../access/MPCManageable.sol";
-import "../access/PausableControlWithAdmin.sol";
+import "../access/MPCAdminPausableControl.sol";
 import "./interfaces/IAnycallExecutor.sol";
 import "./interfaces/IRouterSecurity.sol";
 import "./interfaces/IRetrySwapinAndExec.sol";
@@ -15,8 +14,7 @@ import "./interfaces/IAnyswapERC20Auth.sol";
 import "./interfaces/IRouterMintBurn.sol";
 
 contract MultichainV7Router is
-    MPCManageable,
-    PausableControlWithAdmin,
+    MPCAdminPausableControl,
     ReentrancyGuard,
     IRetrySwapinAndExec
 {
@@ -110,7 +108,7 @@ contract MultichainV7Router is
         address _wNATIVE,
         address _anycallExecutor,
         address _routerSecurity
-    ) MPCManageable(_mpc) PausableControlWithAdmin(_admin) {
+    ) MPCAdminPausableControl(_admin, _mpc) {
         require(_anycallExecutor != address(0), "zero anycall executor");
         anycallExecutor = _anycallExecutor;
         wNATIVE = _wNATIVE;
@@ -141,7 +139,7 @@ contract MultichainV7Router is
     function addAnycallProxies(
         address[] calldata proxies,
         bool[] calldata acceptAnyTokenFlags
-    ) external nonReentrant onlyMPC {
+    ) external nonReentrant onlyAdmin {
         uint256 length = proxies.length;
         require(length == acceptAnyTokenFlags.length, "length mismatch");
         for (uint256 i = 0; i < length; i++) {
@@ -155,7 +153,7 @@ contract MultichainV7Router is
     function removeAnycallProxies(address[] calldata proxies)
         external
         nonReentrant
-        onlyMPC
+        onlyAdmin
     {
         for (uint256 i = 0; i < proxies.length; i++) {
             delete anycallProxyInfo[proxies[i]];
