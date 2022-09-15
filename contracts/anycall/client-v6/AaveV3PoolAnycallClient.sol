@@ -3,7 +3,7 @@ pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../access/MPCManageable.sol";
-import "../../access/PausableControlWithAdmin.sol";
+import "../../access/AdminPausableControl.sol";
 
 interface IAaveV3Pool {
     function mintUnbacked(
@@ -48,7 +48,7 @@ interface IAnycallV6Proxy {
     ) external payable;
 }
 
-abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
+abstract contract AnycallClientBase is IApp, AdminPausableControl {
     address public callProxy;
     address public executor;
     mapping(uint256 => address) public clientPeers; // key is chainId
@@ -59,7 +59,7 @@ abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
     }
 
     constructor(address _admin, address _callProxy)
-        PausableControlWithAdmin(_admin)
+        AdminPausableControl(_admin)
     {
         require(_callProxy != address(0));
         callProxy = _callProxy;

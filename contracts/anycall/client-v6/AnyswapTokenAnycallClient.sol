@@ -2,7 +2,7 @@
 pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../../access/PausableControlWithAdmin.sol";
+import "../../access/AdminPausableControl.sol";
 
 /// three level architecture
 /// top level is the `AnycallClient` which the users interact with (through UI or tools)
@@ -45,7 +45,7 @@ interface IAnycallV6Proxy {
     ) external payable;
 }
 
-abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
+abstract contract AnycallClientBase is IApp, AdminPausableControl {
     address public callProxy;
     address public executor;
 
@@ -58,7 +58,7 @@ abstract contract AnycallClientBase is IApp, PausableControlWithAdmin {
     }
 
     constructor(address _admin, address _callProxy)
-        PausableControlWithAdmin(_admin)
+        AdminPausableControl(_admin)
     {
         require(_callProxy != address(0));
         callProxy = _callProxy;
