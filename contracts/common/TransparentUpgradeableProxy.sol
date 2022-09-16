@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Sources flattened with hardhat v2.9.1 https://hardhat.org
+// Sources flattened with hardhat v2.11.2 https://hardhat.org
 
-// File @openzeppelin/contracts/proxy/Proxy.sol@v4.5.0
+// File @openzeppelin/contracts/proxy/Proxy.sol@v4.7.3
 
-// OpenZeppelin Contracts (last updated v4.5.0) (proxy/Proxy.sol)
+// OpenZeppelin Contracts (last updated v4.6.0) (proxy/Proxy.sol)
 
 pragma solidity ^0.8.10;
 
@@ -56,7 +56,7 @@ abstract contract Proxy {
     }
 
     /**
-     * @dev This is a virtual function that should be overriden so it returns the address to which the fallback function
+     * @dev This is a virtual function that should be overridden so it returns the address to which the fallback function
      * and {_fallback} should delegate.
      */
     function _implementation() internal view virtual returns (address);
@@ -64,7 +64,7 @@ abstract contract Proxy {
     /**
      * @dev Delegates the current call to the address returned by `_implementation()`.
      *
-     * This function does not return to its internall call site, it will return directly to the external caller.
+     * This function does not return to its internal call site, it will return directly to the external caller.
      */
     function _fallback() internal virtual {
         _beforeFallback();
@@ -91,28 +91,12 @@ abstract contract Proxy {
      * @dev Hook that is called before falling back to the implementation. Can happen as part of a manual `_fallback`
      * call, or as part of the Solidity `fallback` or `receive` functions.
      *
-     * If overriden should call `super._beforeFallback()`.
+     * If overridden should call `super._beforeFallback()`.
      */
     function _beforeFallback() internal virtual {}
 }
 
-// File @openzeppelin/contracts/proxy/beacon/IBeacon.sol@v4.5.0
-
-// OpenZeppelin Contracts v4.4.1 (proxy/beacon/IBeacon.sol)
-
-/**
- * @dev This is the interface that {BeaconProxy} expects of its beacon.
- */
-interface IBeacon {
-    /**
-     * @dev Must return an address that can be used as a delegate call target.
-     *
-     * {BeaconProxy} will check that this address is a contract.
-     */
-    function implementation() external view returns (address);
-}
-
-// File @openzeppelin/contracts/interfaces/draft-IERC1822.sol@v4.5.0
+// File @openzeppelin/contracts/interfaces/draft-IERC1822.sol@v4.7.3
 
 // OpenZeppelin Contracts (last updated v4.5.0) (interfaces/draft-IERC1822.sol)
 
@@ -132,9 +116,129 @@ interface IERC1822Proxiable {
     function proxiableUUID() external view returns (bytes32);
 }
 
-// File @openzeppelin/contracts/utils/Address.sol@v4.5.0
+// File @openzeppelin/contracts/proxy/beacon/IBeacon.sol@v4.7.3
 
-// OpenZeppelin Contracts (last updated v4.5.0) (utils/Address.sol)
+// OpenZeppelin Contracts v4.4.1 (proxy/beacon/IBeacon.sol)
+
+/**
+ * @dev This is the interface that {BeaconProxy} expects of its beacon.
+ */
+interface IBeacon {
+    /**
+     * @dev Must return an address that can be used as a delegate call target.
+     *
+     * {BeaconProxy} will check that this address is a contract.
+     */
+    function implementation() external view returns (address);
+}
+
+// File @openzeppelin/contracts/utils/StorageSlot.sol@v4.7.3
+
+// OpenZeppelin Contracts (last updated v4.7.0) (utils/StorageSlot.sol)
+
+/**
+ * @dev Library for reading and writing primitive types to specific storage slots.
+ *
+ * Storage slots are often used to avoid storage conflict when dealing with upgradeable contracts.
+ * This library helps with reading and writing to such slots without the need for inline assembly.
+ *
+ * The functions in this library return Slot structs that contain a `value` member that can be used to read or write.
+ *
+ * Example usage to set ERC1967 implementation slot:
+ * ```
+ * contract ERC1967 {
+ *     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+ *
+ *     function _getImplementation() internal view returns (address) {
+ *         return StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+ *     }
+ *
+ *     function _setImplementation(address newImplementation) internal {
+ *         require(Address.isContract(newImplementation), "ERC1967: new implementation is not a contract");
+ *         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
+ *     }
+ * }
+ * ```
+ *
+ * _Available since v4.1 for `address`, `bool`, `bytes32`, and `uint256`._
+ */
+library StorageSlot {
+    struct AddressSlot {
+        address value;
+    }
+
+    struct BooleanSlot {
+        bool value;
+    }
+
+    struct Bytes32Slot {
+        bytes32 value;
+    }
+
+    struct Uint256Slot {
+        uint256 value;
+    }
+
+    /**
+     * @dev Returns an `AddressSlot` with member `value` located at `slot`.
+     */
+    function getAddressSlot(bytes32 slot)
+        internal
+        pure
+        returns (AddressSlot storage r)
+    {
+        /// @solidity memory-safe-assembly
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `BooleanSlot` with member `value` located at `slot`.
+     */
+    function getBooleanSlot(bytes32 slot)
+        internal
+        pure
+        returns (BooleanSlot storage r)
+    {
+        /// @solidity memory-safe-assembly
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Bytes32Slot` with member `value` located at `slot`.
+     */
+    function getBytes32Slot(bytes32 slot)
+        internal
+        pure
+        returns (Bytes32Slot storage r)
+    {
+        /// @solidity memory-safe-assembly
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Uint256Slot` with member `value` located at `slot`.
+     */
+    function getUint256Slot(bytes32 slot)
+        internal
+        pure
+        returns (Uint256Slot storage r)
+    {
+        /// @solidity memory-safe-assembly
+        assembly {
+            r.slot := slot
+        }
+    }
+}
+
+// File @openzeppelin/contracts/utils/Address.sol@v4.7.3
+
+// OpenZeppelin Contracts (last updated v4.7.0) (utils/Address.sol)
 
 /**
  * @dev Collection of functions related to the address type
@@ -379,7 +483,7 @@ library Address {
             // Look for revert reason and bubble it up if present
             if (returndata.length > 0) {
                 // The easiest way to bubble the revert reason is using memory via assembly
-
+                /// @solidity memory-safe-assembly
                 assembly {
                     let returndata_size := mload(returndata)
                     revert(add(32, returndata), returndata_size)
@@ -391,107 +495,7 @@ library Address {
     }
 }
 
-// File @openzeppelin/contracts/utils/StorageSlot.sol@v4.5.0
-
-// OpenZeppelin Contracts v4.4.1 (utils/StorageSlot.sol)
-
-/**
- * @dev Library for reading and writing primitive types to specific storage slots.
- *
- * Storage slots are often used to avoid storage conflict when dealing with upgradeable contracts.
- * This library helps with reading and writing to such slots without the need for inline assembly.
- *
- * The functions in this library return Slot structs that contain a `value` member that can be used to read or write.
- *
- * Example usage to set ERC1967 implementation slot:
- * ```
- * contract ERC1967 {
- *     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
- *
- *     function _getImplementation() internal view returns (address) {
- *         return StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
- *     }
- *
- *     function _setImplementation(address newImplementation) internal {
- *         require(Address.isContract(newImplementation), "ERC1967: new implementation is not a contract");
- *         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
- *     }
- * }
- * ```
- *
- * _Available since v4.1 for `address`, `bool`, `bytes32`, and `uint256`._
- */
-library StorageSlot {
-    struct AddressSlot {
-        address value;
-    }
-
-    struct BooleanSlot {
-        bool value;
-    }
-
-    struct Bytes32Slot {
-        bytes32 value;
-    }
-
-    struct Uint256Slot {
-        uint256 value;
-    }
-
-    /**
-     * @dev Returns an `AddressSlot` with member `value` located at `slot`.
-     */
-    function getAddressSlot(bytes32 slot)
-        internal
-        pure
-        returns (AddressSlot storage r)
-    {
-        assembly {
-            r.slot := slot
-        }
-    }
-
-    /**
-     * @dev Returns an `BooleanSlot` with member `value` located at `slot`.
-     */
-    function getBooleanSlot(bytes32 slot)
-        internal
-        pure
-        returns (BooleanSlot storage r)
-    {
-        assembly {
-            r.slot := slot
-        }
-    }
-
-    /**
-     * @dev Returns an `Bytes32Slot` with member `value` located at `slot`.
-     */
-    function getBytes32Slot(bytes32 slot)
-        internal
-        pure
-        returns (Bytes32Slot storage r)
-    {
-        assembly {
-            r.slot := slot
-        }
-    }
-
-    /**
-     * @dev Returns an `Uint256Slot` with member `value` located at `slot`.
-     */
-    function getUint256Slot(bytes32 slot)
-        internal
-        pure
-        returns (Uint256Slot storage r)
-    {
-        assembly {
-            r.slot := slot
-        }
-    }
-}
-
-// File @openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol@v4.5.0
+// File @openzeppelin/contracts/proxy/ERC1967/ERC1967Upgrade.sol@v4.7.3
 
 // OpenZeppelin Contracts (last updated v4.5.0) (proxy/ERC1967/ERC1967Upgrade.sol)
 
@@ -694,9 +698,9 @@ abstract contract ERC1967Upgrade {
     }
 }
 
-// File @openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol@v4.5.0
+// File @openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol@v4.7.3
 
-// OpenZeppelin Contracts v4.4.1 (proxy/ERC1967/ERC1967Proxy.sol)
+// OpenZeppelin Contracts (last updated v4.7.0) (proxy/ERC1967/ERC1967Proxy.sol)
 
 /**
  * @dev This contract implements an upgradeable proxy. It is upgradeable because calls are delegated to an
@@ -709,13 +713,9 @@ contract ERC1967Proxy is Proxy, ERC1967Upgrade {
      * @dev Initializes the upgradeable proxy with an initial implementation specified by `_logic`.
      *
      * If `_data` is nonempty, it's used as data in a delegate call to `_logic`. This will typically be an encoded
-     * function call, and allows initializating the storage of the proxy like a Solidity constructor.
+     * function call, and allows initializing the storage of the proxy like a Solidity constructor.
      */
     constructor(address _logic, bytes memory _data) payable {
-        assert(
-            _IMPLEMENTATION_SLOT ==
-                bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)
-        );
         _upgradeToAndCall(_logic, _data, false);
     }
 
@@ -733,9 +733,9 @@ contract ERC1967Proxy is Proxy, ERC1967Upgrade {
     }
 }
 
-// File @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol@v4.5.0
+// File @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol@v4.7.3
 
-// OpenZeppelin Contracts v4.4.1 (proxy/transparent/TransparentUpgradeableProxy.sol)
+// OpenZeppelin Contracts (last updated v4.7.0) (proxy/transparent/TransparentUpgradeableProxy.sol)
 
 /**
  * @dev This contract implements a proxy that is upgradeable by an admin.
@@ -768,17 +768,13 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
         address admin_,
         bytes memory _data
     ) payable ERC1967Proxy(_logic, _data) {
-        assert(
-            _ADMIN_SLOT ==
-                bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1)
-        );
         _changeAdmin(admin_);
     }
 
     /**
      * @dev Modifier used internally that will delegate the call to the implementation unless the sender is the admin.
      */
-    modifier ifProxyAdmin() {
+    modifier ifAdmin() {
         if (msg.sender == _getAdmin()) {
             _;
         } else {
@@ -795,7 +791,7 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
      * https://eth.wiki/json-rpc/API#eth_getstorageat[`eth_getStorageAt`] RPC call.
      * `0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103`
      */
-    function getProxyAdmin() external ifProxyAdmin returns (address admin_) {
+    function admin() external ifAdmin returns (address admin_) {
         admin_ = _getAdmin();
     }
 
@@ -808,9 +804,9 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
      * https://eth.wiki/json-rpc/API#eth_getstorageat[`eth_getStorageAt`] RPC call.
      * `0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc`
      */
-    function getProxyImplementation()
+    function implementation()
         external
-        ifProxyAdmin
+        ifAdmin
         returns (address implementation_)
     {
         implementation_ = _implementation();
@@ -823,7 +819,7 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
      *
      * NOTE: Only the admin can call this function. See {ProxyAdmin-changeProxyAdmin}.
      */
-    function changeProxyAdmin(address newAdmin) external virtual ifProxyAdmin {
+    function changeAdmin(address newAdmin) external virtual ifAdmin {
         _changeAdmin(newAdmin);
     }
 
@@ -832,7 +828,7 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
      *
      * NOTE: Only the admin can call this function. See {ProxyAdmin-upgrade}.
      */
-    function upgradeTo(address newImplementation) external ifProxyAdmin {
+    function upgradeTo(address newImplementation) external ifAdmin {
         _upgradeToAndCall(newImplementation, bytes(""), false);
     }
 
@@ -846,9 +842,16 @@ contract TransparentUpgradeableProxy is ERC1967Proxy {
     function upgradeToAndCall(address newImplementation, bytes calldata data)
         external
         payable
-        ifProxyAdmin
+        ifAdmin
     {
         _upgradeToAndCall(newImplementation, data, true);
+    }
+
+    /**
+     * @dev Returns the current admin.
+     */
+    function _admin() internal view virtual returns (address) {
+        return _getAdmin();
     }
 
     /**

@@ -3,7 +3,20 @@
 pragma solidity ^0.8.0;
 
 import "../access/AdminControl.sol";
-import "./TransparentUpgradeableProxy.sol";
+
+interface IProxy {
+    function implementation() external returns (address);
+
+    function admin() external returns (address);
+
+    function changeAdmin(address newAdmin) external;
+
+    function upgradeTo(address newImplementation) external;
+
+    function upgradeToAndCall(address newImplementation, bytes calldata data)
+        external
+        payable;
+}
 
 /**
  * @dev This is an auxiliary contract meant to be assigned as the admin of a {TransparentUpgradeableProxy}. For an
@@ -22,16 +35,15 @@ contract ProxyAdmin is AdminControl {
      *
      * - This contract must be the admin of `proxy`.
      */
-    function getProxyImplementation(TransparentUpgradeableProxy proxy)
+    function getProxyImplementation(address proxy)
         public
         view
         virtual
         returns (address)
     {
         // We need to manually run the static call since the getter cannot be flagged as view
-        // bytes4(keccak256("getProxyImplementation()")) == 0x90e4b720
         (bool success, bytes memory returndata) = address(proxy).staticcall(
-            hex"90e4b720"
+            abi.encodeWithSelector(IProxy.implementation.selector)
         );
         require(success);
         return abi.decode(returndata, (address));
@@ -44,16 +56,15 @@ contract ProxyAdmin is AdminControl {
      *
      * - This contract must be the admin of `proxy`.
      */
-    function getProxyAdmin(TransparentUpgradeableProxy proxy)
+    function getProxyAdmin(address proxy)
         public
         view
         virtual
         returns (address)
     {
         // We need to manually run the static call since the getter cannot be flagged as view
-        // bytes4(keccak256("getProxyAdmin()")) == 0x8b3240a0
         (bool success, bytes memory returndata) = address(proxy).staticcall(
-            hex"8b3240a0"
+            abi.encodeWithSelector(IProxy.admin.selector)
         );
         require(success);
         return abi.decode(returndata, (address));
@@ -66,11 +77,12 @@ contract ProxyAdmin is AdminControl {
      *
      * - This contract must be the current admin of `proxy`.
      */
-    function changeProxyAdmin(
-        TransparentUpgradeableProxy proxy,
-        address newAdmin
-    ) public virtual onlyAdmin {
-        proxy.changeProxyAdmin(newAdmin);
+    function changeProxyAdmin(address proxy, address newAdmin)
+        public
+        virtual
+        onlyAdmin
+    {
+        IProxy(proxy).changeAdmin(newAdmin);
     }
 
     /**
@@ -80,12 +92,12 @@ contract ProxyAdmin is AdminControl {
      *
      * - This contract must be the admin of `proxy`.
      */
-    function upgrade(TransparentUpgradeableProxy proxy, address implementation)
+    function upgrade(address proxy, address implementation)
         public
         virtual
         onlyAdmin
     {
-        proxy.upgradeTo(implementation);
+        IProxy(proxy).upgradeTo(implementation);
     }
 
     /**
@@ -97,10 +109,10 @@ contract ProxyAdmin is AdminControl {
      * - This contract must be the admin of `proxy`.
      */
     function upgradeAndCall(
-        TransparentUpgradeableProxy proxy,
+        address proxy,
         address implementation,
         bytes memory data
     ) public payable virtual onlyAdmin {
-        proxy.upgradeToAndCall{value: msg.value}(implementation, data);
+        IProxy(proxy).upgradeToAndCall{value: msg.value}(implementation, data);
     }
 }
