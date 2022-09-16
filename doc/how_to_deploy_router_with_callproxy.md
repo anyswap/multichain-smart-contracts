@@ -7,10 +7,25 @@ related smart contracts
 ```text
 contracts/router/
 ├── AnyCallExecutor.sol
-├── MultichainV7RouterSecurity.sol
+├── interfaces
+│   ├── IAnycallExecutor.sol
+│   ├── IAnycallProxy.sol
+│   ├── IAnyswapERC20Auth.sol
+│   ├── IRetrySwapinAndExec.sol
+│   ├── IRouterMintBurn.sol
+│   ├── IRouterSecurity.sol
+│   ├── IUnderlying.sol
+│   ├── IwNATIVE.sol
+│   └── SwapInfo.sol
 ├── MultichainV7Router.sol
-└── proxy
-    └── SushiSwapProxy.sol
+├── proxy
+│   ├── AnycallProxyBase.sol
+│   ├── CurveAaveProxy.sol
+│   └── SushiSwapProxy.sol
+└── security
+    ├── MultichainV7RouterSecurityProxy.sol
+    ├── MultichainV7RouterSecurity.sol
+    └── MultichainV7RouterSecurityUpgradeable.sol
 ```
 
 Notation: the following steps are not the unique way.
@@ -31,7 +46,7 @@ function removeAuthCallers(address[] calldata _callers) external
 function isAuthCaller(address _caller) external view returns (bool)
 ```
 
-### 0.2. deploy `MultichainV7RouterSecurity` in `MultichainV7RouterSecurity.sol`
+### 0.2. deploy `MultichainV7RouterSecurity` in `security/MultichainV7RouterSecurity.sol`
 
 `MultichainV7RouterSecurity` is a security guard for router v7 contract, and can be updated
 
@@ -47,7 +62,8 @@ function isSupportedCaller(address caller) external view returns (bool)
 **Note: we can deploy an upgradeable router security contract by the following way:**
 
 1. deploy `MultichainV7RouterSecurityUpgradeable`
-2. deploy `MultichainV7RouterSecurityProxy`
+2. deploy `ProxyAdmin` in `common/ProxyAdmin.sol`
+3. deploy `MultichainV7RouterSecurityProxy`
 
     ```solidity
     constructor(
@@ -57,8 +73,8 @@ function isSupportedCaller(address caller) external view returns (bool)
     )
     ```
 
-    the `_roterSecurity` argument is the contract address of `MultichainV7RouterSecurityUpgradeable` deployed in the above step
-    the `admin_` is the proxy administrator who can upgrade the proxy implementation.
+    the `_roterSecurity` argument is the contract address of `MultichainV7RouterSecurityUpgradeable` deployed in the above step 1
+    the `admin_` is the proxy administrator who can upgrade the proxy implementation (deployed in the above step 2).
     the `_data` is the input data of calling `initialize` of `_roterSecurity` (starts with `0x485cc955`)
 
     ```solidity
@@ -169,7 +185,7 @@ where,
 
 > `address token` is the anytoken contract address on the `source` chain
 >
-> `string to` is the fallback receive address when exec failed on the `destination` chain
+> `string to` is the `fallback receive address` when exec failed on the `destination` chain
 >
 > `uint256 amount` is the value transfered on the `source` chain
 >
