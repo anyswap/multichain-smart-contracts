@@ -161,6 +161,7 @@ contract AnyCallV7Upgradeable is Initializable {
         }
     }
 
+    /// @dev pay fee on source chain and return remaining amount
     function _paySrcFees(uint256 fees) internal {
         require(msg.value >= fees, "no enough src fee");
         if (fees > 0) {
@@ -223,9 +224,9 @@ contract AnyCallV7Upgradeable is Initializable {
     */
     function anyExec(
         address _to,
-        bytes memory _data,
-        string memory _appID,
-        RequestContext memory _ctx,
+        bytes calldata _data,
+        string calldata _appID,
+        RequestContext calldata _ctx,
         bytes calldata _extdata
     )
         external
@@ -237,7 +238,48 @@ contract AnyCallV7Upgradeable is Initializable {
     {
         config.checkExec(_appID, _ctx.from, _to);
 
-        bytes32 uniqID = calcUniqID(
+        (bool success, bytes32 uniqID) = _execute(_to, _data, _ctx, _extdata);
+        if (success) {
+            return;
+        }
+
+        bool isFallback = _isSet(_ctx.flags, FLAG_ALLOW_FALLBACK);
+        if (isFallback) {
+            // Call the fallback on the originating chain with the call information (to, data)
+            nonce++;
+            emit LogAnyCall(
+                _ctx.from,
+                "", // to is same as _ctx.from in fallback, so omit it
+                abi.encode(_to, _data),
+                _ctx.fromChainID,
+                FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
+                _appID,
+                nonce,
+                abi.encode(true) // indicate to exec anyFallback
+            );
+        } else {
+            // Store retry record and emit a log
+            bytes memory data = _data; // fix Stack too deep
+            retryExecRecords[uniqID] = keccak256(abi.encode(_to, data));
+            emit StoreRetryExecRecord(
+                _ctx.txhash,
+                _ctx.from,
+                _to,
+                _ctx.fromChainID,
+                _ctx.nonce,
+                data
+            );
+        }
+    }
+
+    /// @notice execute through the executor (sandbox)
+    function _execute(
+        address _to,
+        bytes calldata _data,
+        RequestContext calldata _ctx,
+        bytes calldata _extdata
+    ) internal returns (bool success, bytes32 uniqID) {
+        uniqID = calcUniqID(
             _ctx.txhash,
             _ctx.from,
             _ctx.fromChainID,
@@ -245,67 +287,37 @@ contract AnyCallV7Upgradeable is Initializable {
         );
         require(!execCompleted[uniqID], "exec completed");
 
-        {
-            bool success;
-            bytes memory result;
-            try
-                executor.execute(
-                    _to,
-                    _data,
-                    _ctx.from,
-                    _ctx.fromChainID,
-                    _ctx.nonce,
-                    _extdata
-                )
-            returns (bool succ, bytes memory res) {
-                (success, result) = (succ, res);
-            } catch Error(string memory reason) {
-                result = bytes(reason);
-            } catch (bytes memory reason) {
-                result = reason;
-            }
-            emit LogAnyExec(
-                _ctx.txhash,
-                _ctx.from,
+        bytes memory result;
+
+        try
+            executor.execute(
                 _to,
+                _data,
+                _ctx.from,
                 _ctx.fromChainID,
                 _ctx.nonce,
-                success,
-                result
-            );
-
-            execCompleted[uniqID] = true;
-            if (success) {
-                return;
-            }
+                _extdata
+            )
+        returns (bool succ, bytes memory res) {
+            (success, result) = (succ, res);
+        } catch Error(string memory reason) {
+            result = bytes(reason);
+        } catch (bytes memory reason) {
+            result = reason;
         }
 
-        bool allowFallback = _isSet(_ctx.flags, FLAG_ALLOW_FALLBACK);
+        // set exec completed (dont care success status)
+        execCompleted[uniqID] = true;
 
-        if (!allowFallback) {
-            retryExecRecords[uniqID] = keccak256(abi.encode(_to, _data));
-            emit StoreRetryExecRecord(
-                _ctx.txhash,
-                _ctx.from,
-                _to,
-                _ctx.fromChainID,
-                _ctx.nonce,
-                _data
-            );
-        } else {
-            // Call the fallback on the originating chain with the call information (to, data)
-            nonce++;
-            emit LogAnyCall(
-                _ctx.from,
-                "",
-                abi.encode(_to, _data),
-                _ctx.fromChainID,
-                FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
-                _appID,
-                nonce,
-                abi.encode(true) // indicate is fallback
-            );
-        }
+        emit LogAnyExec(
+            _ctx.txhash,
+            _ctx.from,
+            _to,
+            _ctx.fromChainID,
+            _ctx.nonce,
+            success,
+            result
+        );
     }
 
     function _isSet(uint256 _value, uint256 _testBits)
@@ -316,7 +328,7 @@ contract AnyCallV7Upgradeable is Initializable {
         return (_value & _testBits) == _testBits;
     }
 
-    // @notice Calc unique ID
+    /// @notice Calc unique ID
     function calcUniqID(
         bytes32 _txhash,
         address _from,
@@ -335,10 +347,7 @@ contract AnyCallV7Upgradeable is Initializable {
         address _to,
         bytes calldata _data
     ) external virtual {
-        require(
-            !retryWithPermit || msg.sender == admin || msg.sender == mpc,
-            "no permit"
-        );
+        require(!retryWithPermit || msg.sender == admin, "no permit");
 
         bytes32 uniqID = calcUniqID(_txhash, _from, _fromChainID, _nonce);
         require(execCompleted[uniqID], "no exec");
@@ -350,7 +359,7 @@ contract AnyCallV7Upgradeable is Initializable {
         // Clear record
         delete retryExecRecords[uniqID];
 
-        (bool success, ) = executor.execute(
+        (bool success, bytes memory result) = executor.execute(
             _to,
             _data,
             _from,
@@ -358,7 +367,7 @@ contract AnyCallV7Upgradeable is Initializable {
             _nonce,
             ""
         );
-        require(success);
+        require(success, string(result));
 
         emit DoneRetryExecRecord(_txhash, _from, _fromChainID, _nonce);
     }
