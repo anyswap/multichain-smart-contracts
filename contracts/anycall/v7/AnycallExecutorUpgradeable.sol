@@ -85,7 +85,7 @@ contract AnycallExecutorUpgradeable is IAnycallExecutor, RoleControl {
         if (!isFallback) {
             (success, result) = IApp(_to).anyExecute(_data);
         } else {
-            (success, result) = IApp(_to).anyFallback(_to, _data);
+            (success, result) = IApp(_to).anyFallback(_data);
         }
 
         context = Context({from: address(0), fromChainID: 0, nonce: 0});

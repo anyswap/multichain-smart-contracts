@@ -150,8 +150,8 @@ This is dependent according to the concrete app implementation.
             returns (bool success, bytes memory result);
 
         /// (optional,advised) call back on the originating chain if the cross chain interaction fails
-        /// `_to` and `_data` are the orignal interaction arguments call on the destination chain
-        function anyFallback(address _to, bytes calldata _data)
+        /// `_data` is the orignal interaction arguments exec on the destination chain
+        function anyFallback(bytes calldata _data)
             external
             returns (bool success, bytes memory result);
     }

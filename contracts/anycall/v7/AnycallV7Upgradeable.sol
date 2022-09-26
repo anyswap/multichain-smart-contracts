@@ -278,37 +278,47 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
     {
         IAnycallConfig(config).checkExec(_appID, _ctx.from, _to);
 
-        (bool success, bytes32 uniqID) = _execute(_to, _data, _ctx, _extdata);
-        if (success) {
-            return;
-        }
+        bytes32 uniqID = calcUniqID(
+            _ctx.txhash,
+            _ctx.from,
+            _ctx.fromChainID,
+            _ctx.nonce
+        );
+        require(!execCompleted[uniqID], "exec completed");
 
-        bool isFallback = _isSet(_ctx.flags, FLAG_ALLOW_FALLBACK);
-        if (isFallback) {
-            // Call the fallback on the originating chain with the call information (to, data)
-            nonce++;
-            emit LogAnyCall(
-                _ctx.from,
-                "", // to is same as _ctx.from in fallback, so omit it
-                abi.encode(_to, _data),
-                _ctx.fromChainID,
-                FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
-                _appID,
-                nonce,
-                abi.encode(true) // indicate to exec anyFallback
-            );
-        } else {
-            // Store retry record and emit a log
-            bytes memory data = _data; // fix Stack too deep
-            retryExecRecords[uniqID] = keccak256(abi.encode(_to, data));
-            emit StoreRetryExecRecord(
-                _ctx.txhash,
-                _ctx.from,
-                _to,
-                _ctx.fromChainID,
-                _ctx.nonce,
-                data
-            );
+        bool success = _execute(_to, _data, _ctx, _extdata);
+
+        // set exec completed (dont care success status)
+        execCompleted[uniqID] = true;
+
+        if (!success) {
+            if (_isSet(_ctx.flags, FLAG_ALLOW_FALLBACK)) {
+                // Call the fallback on the originating chain
+                nonce++;
+                string memory appID = _appID; // fix Stack too deep
+                emit LogAnyCall(
+                    _to,
+                    _ctx.from,
+                    _data,
+                    _ctx.fromChainID,
+                    FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
+                    appID,
+                    nonce,
+                    abi.encode(true) // indicate to exec anyFallback
+                );
+            } else {
+                // Store retry record and emit a log
+                bytes memory data = _data; // fix Stack too deep
+                retryExecRecords[uniqID] = keccak256(abi.encode(_to, data));
+                emit StoreRetryExecRecord(
+                    _ctx.txhash,
+                    _ctx.from,
+                    _to,
+                    _ctx.fromChainID,
+                    _ctx.nonce,
+                    data
+                );
+            }
         }
     }
 
@@ -318,15 +328,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         bytes calldata _data,
         RequestContext calldata _ctx,
         bytes calldata _extdata
-    ) internal returns (bool success, bytes32 uniqID) {
-        uniqID = calcUniqID(
-            _ctx.txhash,
-            _ctx.from,
-            _ctx.fromChainID,
-            _ctx.nonce
-        );
-        require(!execCompleted[uniqID], "exec completed");
-
+    ) internal returns (bool success) {
         bytes memory result;
 
         try
@@ -345,9 +347,6 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         } catch (bytes memory reason) {
             result = reason;
         }
-
-        // set exec completed (dont care success status)
-        execCompleted[uniqID] = true;
 
         emit LogAnyExec(
             _ctx.txhash,
@@ -386,7 +385,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         uint256 _nonce,
         address _to,
         bytes calldata _data
-    ) external virtual {
+    ) external virtual lock {
         require(!retryWithPermit || msg.sender == admin, "no permit");
 
         bytes32 uniqID = calcUniqID(_txhash, _from, _fromChainID, _nonce);
