@@ -5,6 +5,7 @@ pragma solidity ^0.8.10;
 import "../../common/Initializable.sol";
 import "./interfaces/IAnycallExecutor.sol";
 import "./interfaces/IAnycallConfig.sol";
+import "./interfaces/IAnycallProxy.sol";
 
 /// anycall proxy is a universal protocal to complete cross-chain interaction.
 /// 1. the client call `AnycallV7Proxy::anyCall`
@@ -16,7 +17,7 @@ import "./interfaces/IAnycallConfig.sol";
 /// 3. if step 2 failed and step 1 has set allow fallback flags,
 ///         then emit a `LogAnyCall` log on the destination chain
 ///         to cause fallback on the originating chain (exec `IApp::anyFallback`)
-contract AnyCallV7Upgradeable is Initializable {
+contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
     // Context of the request on originating chain
     struct RequestContext {
         bytes32 txhash;
@@ -41,10 +42,10 @@ contract AnyCallV7Upgradeable is Initializable {
     bool public paused;
 
     // applications should give permission to this executor
-    IAnycallExecutor public executor;
+    address public executor;
 
     // anycall config contract
-    IAnycallConfig public config;
+    address public config;
 
     mapping(bytes32 => bytes32) public retryExecRecords;
     bool public retryWithPermit;
@@ -60,6 +61,16 @@ contract AnyCallV7Upgradeable is Initializable {
         unlocked = 1;
     }
 
+    event LogAnyCall(
+        address indexed from,
+        address to,
+        bytes data,
+        uint256 toChainID,
+        uint256 flags,
+        string appID,
+        uint256 nonce,
+        bytes extdata
+    );
     event LogAnyCall(
         address indexed from,
         string to,
@@ -125,8 +136,8 @@ contract AnyCallV7Upgradeable is Initializable {
 
         admin = _admin;
         mpc = _mpc;
-        executor = IAnycallExecutor(_executor);
-        config = IAnycallConfig(_config);
+        executor = _executor;
+        config = _config;
 
         emit ApplyMPC(address(0), _mpc, block.timestamp);
     }
@@ -155,7 +166,7 @@ contract AnyCallV7Upgradeable is Initializable {
         if (_isSet(_flags, FLAG_PAY_FEE_ON_DEST)) {
             uint256 _prevGasLeft = gasleft();
             _;
-            config.chargeFeeOnDestChain(_from, _prevGasLeft);
+            IAnycallConfig(config).chargeFeeOnDestChain(_from, _prevGasLeft);
         } else {
             _;
         }
@@ -185,18 +196,47 @@ contract AnyCallV7Upgradeable is Initializable {
         @dev `_extdata` The extension data for call context
     */
     function anyCall(
+        address _to,
+        bytes calldata _data,
+        uint256 _toChainID,
+        uint256 _flags,
+        bytes calldata /*_extdata*/
+    ) external payable virtual whenNotPaused {
+        (string memory _appID, uint256 _srcFees) = IAnycallConfig(config)
+            .checkCall(msg.sender, _data, _toChainID, _flags);
+
+        _paySrcFees(_srcFees);
+
+        nonce++;
+        emit LogAnyCall(
+            msg.sender,
+            _to,
+            _data,
+            _toChainID,
+            _flags,
+            _appID,
+            nonce,
+            ""
+        );
+    }
+
+    /**
+        @notice Submit a request for a cross chain interaction
+        @param _to The target to interact with on `_toChainID`
+        @param _data The calldata supplied for the interaction with `_to`
+        @param _toChainID The target chain id to interact with
+        @param _flags The flags of app on the originating chain
+        @dev `_extdata` The extension data for call context
+    */
+    function anyCall(
         string calldata _to,
         bytes calldata _data,
         uint256 _toChainID,
         uint256 _flags,
         bytes calldata /*_extdata*/
     ) external payable virtual whenNotPaused {
-        (string memory _appID, uint256 _srcFees) = config.checkCall(
-            msg.sender,
-            _data,
-            _toChainID,
-            _flags
-        );
+        (string memory _appID, uint256 _srcFees) = IAnycallConfig(config)
+            .checkCall(msg.sender, _data, _toChainID, _flags);
 
         _paySrcFees(_srcFees);
 
@@ -236,7 +276,7 @@ contract AnyCallV7Upgradeable is Initializable {
         chargeDestFee(_ctx.from, _ctx.flags)
         onlyMPC
     {
-        config.checkExec(_appID, _ctx.from, _to);
+        IAnycallConfig(config).checkExec(_appID, _ctx.from, _to);
 
         (bool success, bytes32 uniqID) = _execute(_to, _data, _ctx, _extdata);
         if (success) {
@@ -290,7 +330,7 @@ contract AnyCallV7Upgradeable is Initializable {
         bytes memory result;
 
         try
-            executor.execute(
+            IAnycallExecutor(executor).execute(
                 _to,
                 _data,
                 _ctx.from,
@@ -359,14 +399,8 @@ contract AnyCallV7Upgradeable is Initializable {
         // Clear record
         delete retryExecRecords[uniqID];
 
-        (bool success, bytes memory result) = executor.execute(
-            _to,
-            _data,
-            _from,
-            _fromChainID,
-            _nonce,
-            ""
-        );
+        (bool success, bytes memory result) = IAnycallExecutor(executor)
+            .execute(_to, _data, _from, _fromChainID, _nonce, "");
         require(success, string(result));
 
         emit DoneRetryExecRecord(_txhash, _from, _fromChainID, _nonce);
@@ -374,13 +408,13 @@ contract AnyCallV7Upgradeable is Initializable {
 
     /// @notice Set executor
     function setExecutor(address _executor) external onlyMPC {
-        executor = IAnycallExecutor(_executor);
+        executor = _executor;
         emit SetExecutor(_executor);
     }
 
     /// @notice Set Config
     function setConfig(address _config) external onlyMPC {
-        config = IAnycallConfig(_config);
+        config = _config;
         emit SetConfig(_config);
     }
 

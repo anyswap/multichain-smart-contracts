@@ -9,6 +9,8 @@ contracts/anycall/v7
 ├── AnycallV7Config.sol
 ├── AnycallV7Proxy.sol
 ├── AnycallV7Upgradeable.sol
+├── app-examples
+│   └── AppDemo.sol
 ├── interfaces
 │   ├── IAnycallConfig.sol
 │   ├── IAnycallExecutor.sol
@@ -131,4 +133,26 @@ This is dependent according to the concrete app implementation.
 
     # allow fallback if cross chain interaction failed on the destination chain
     uint256 FLAG_ALLOW_FALLBACK = 4;
+    ```
+
+3. how to prepare `pay fee on destination chain`
+
+    if set pay fee on destination chain, then the caller (ie. the App contract) should
+    `deposit/withdraw` fees (the Native gas token) to the config contract (`AnycallV7Config`).
+
+4. the app should implement the interface `IApp.sol`
+
+    ```solidity
+    interface IApp {
+        /// (required) call on the destination chain to exec the interaction
+        function anyExecute(bytes calldata _data)
+            external
+            returns (bool success, bytes memory result);
+
+        /// (optional,advised) call back on the originating chain if the cross chain interaction fails
+        /// `_to` and `_data` are the orignal interaction arguments call on the destination chain
+        function anyFallback(address _to, bytes calldata _data)
+            external
+            returns (bool success, bytes memory result);
+    }
     ```
