@@ -5,6 +5,9 @@
     "@openzeppelin/contracts-upgradeable": "^4.7.3"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.3",
+    "@nomiclabs/hardhat-ethers": "^2.1.1",
+    "chai": "^4.3.6",
     "ethers": "^5.7.1",
     "hardhat": "^2.11.2",
     "web3": "^1.8.0"
