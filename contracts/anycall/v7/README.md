@@ -156,3 +156,100 @@ This is dependent according to the concrete app implementation.
             returns (bool success, bytes memory result);
     }
     ```
+
+## changes compare with anycall v6
+
+### 1. anycall v7 is split into 3 contract and 2 of them are upgradeable
+
+- AnycallV7Config        (replaceable)
+- AnycallExecutorProxy   (upgradeable)
+- AnycallV7Proxy         (upgradeable)
+
+### 2. `anyFallback` function prototype is changed
+
+If the `App` want to support `fallback`,
+it must support the following `anyFallback` interface.
+
+anycall v6 version:
+
+```solidity
+function anyFallback(address _to, bytes calldata _data) external;
+```
+
+anycall v7 version:
+
+```solidity
+function anyFallback(bytes calldata _data)
+    external
+    returns (bool success, bytes memory result);
+```
+
+### 3. executor can distinguish `anyExectue` and `anyFallback`
+
+in anycall v6 version, the `App` should encode call data with an selector.
+and the `anyExecute` should identify which function to call.
+
+in anycall v7 version, only the business related data is needed.
+the `_data` in `function anyExecute(bytes calldata _data)`
+and `function anyFallback(bytes calldata _data)` is same.
+
+### 4. the default way of paying fee is changed
+
+in anycall v6 version, defaults to `pay fee on destination chain`
+
+in anycall v7 version, defaults to `pay fee on source chain`
+
+### 5. if choose `pay fee on destination chain`, the deposit/withdraw pool is changed
+
+in anycall v6 version, the deposit/withdraw pool is `AnyCallV6Proxy` contract address
+
+in anycall v7 version, the deposit/withdraw pool is `AnycallV7Config` contract address
+
+### 6. AnyCallV6Proxy::anyCall function prototype is changed
+
+anycall v6 version:
+
+if `_fallback` is zero address, then disallow fallback.
+
+`_flags` value are the following:
+
+```solidity
+FLAG_MERGE_CONFIG_FLAGS = 1;
+FLAG_PAY_FEE_ON_SRC     = 2;
+```
+
+```solidity
+function anyCall(
+    address _to,
+    bytes calldata _data,
+    address _fallback,
+    uint256 _toChainID,
+    uint256 _flags
+)
+```
+
+anycall v7 version:
+
+`_flags` value are the following:
+
+```solidity
+FLAG_MERGE_CONFIG_FLAGS = 1;
+FLAG_PAY_FEE_ON_DEST    = 2;
+FLAG_ALLOW_FALLBACK     = 4;
+```
+
+if `FLAG_ALLOW_FALLBACK` is set, then allow fallback, otherwise disallow fallback.
+
+```solidity
+function anyCall(
+    address _to,
+    bytes calldata _data,
+    uint256 _toChainID,
+    uint256 _flags,
+    bytes calldata _extdata /*reserved*/
+)
+```
+
+### 7. anycall add a `string to` receiver
+
+reserved for non-evm supports.
