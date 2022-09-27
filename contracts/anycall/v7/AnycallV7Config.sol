@@ -45,7 +45,6 @@ contract AnycallV7Config is IAnycallConfig {
     // key is appID, a unique identifier for each project
     mapping(string => AppConfig) public appConfig;
     mapping(string => mapping(address => bool)) public appExecWhitelist;
-    mapping(string => address[]) public appHistoryWhitelist;
     mapping(string => bool) public appBlacklist;
     mapping(uint256 => SrcFeeConfig) public srcDefaultFees; // key is chainID
     mapping(string => mapping(uint256 => SrcFeeConfig)) public srcCustomFees;
@@ -80,15 +79,15 @@ contract AnycallV7Config is IAnycallConfig {
 
     /// @dev Access control function
     modifier onlyAnycallContract() {
-        require(msg.sender == anycallContract, "only anycall contract");
+        require(msg.sender == anycallContract, "forbid");
         _;
     }
 
     event InitAnycallContract(address);
     event Deposit(address indexed account, uint256 amount);
     event Withdraw(address indexed account, uint256 amount);
-    event SetBlacklist(string appID, bool flag);
-    event SetWhitelist(string appID, address indexed whitelist, bool flag);
+    event SetBlacklists(string[] appID, bool flag);
+    event SetWhitelists(string appID, address[] whitelist, bool flag);
     event UpdatePremium(uint256 oldPremium, uint256 newPremium);
     event AddAdmin(address admin);
     event RemoveAdmin(address admin);
@@ -104,15 +103,11 @@ contract AnycallV7Config is IAnycallConfig {
     );
     event SetAppConfig(
         string appID,
-        address indexed app,
-        address indexed appAdmin,
+        address app,
+        address appAdmin,
         uint256 appFlags
     );
-    event UpgradeApp(
-        string appID,
-        address indexed oldApp,
-        address indexed newApp
-    );
+    event UpgradeApp(string appID, address oldApp, address newApp);
 
     constructor(
         address _admin,
@@ -120,7 +115,7 @@ contract AnycallV7Config is IAnycallConfig {
         uint128 _premium,
         uint256 _mode
     ) {
-        require(_mpc != address(0), "zero mpc address");
+        require(_mpc != address(0));
         if (_admin != address(0)) {
             isAdmin[_admin] = true;
             admins.push(_admin);
@@ -140,7 +135,7 @@ contract AnycallV7Config is IAnycallConfig {
 
     /// @dev Init the corresponding anycall contract
     function initAnycallContract(address _anycallContract) external onlyAdmin {
-        require(anycallContract == address(0), "inited");
+        require(anycallContract == address(0));
         anycallContract = _anycallContract;
         emit InitAnycallContract(anycallContract);
     }
@@ -164,7 +159,7 @@ contract AnycallV7Config is IAnycallConfig {
             require(
                 (_permissionlessMode && config.app == address(0)) ||
                     _sender == config.app,
-                "app not exist"
+                "no app"
             );
 
             if (
@@ -248,25 +243,6 @@ contract AnycallV7Config is IAnycallConfig {
         require(success);
     }
 
-    /// @notice Set app blacklist
-    function setBlacklist(string calldata _appID, bool _flag)
-        external
-        onlyAdmin
-    {
-        appBlacklist[_appID] = _flag;
-        emit SetBlacklist(_appID, _flag);
-    }
-
-    /// @notice Set app blacklist in batch
-    function setBlacklists(string[] calldata _appIDs, bool _flag)
-        external
-        onlyAdmin
-    {
-        for (uint256 i = 0; i < _appIDs.length; i++) {
-            this.setBlacklist(_appIDs[i], _flag);
-        }
-    }
-
     /// @notice Set the premimum for cross chain executions
     /// @param _premium The premium per gas
     function setPremium(uint128 _premium) external onlyAdmin {
@@ -348,8 +324,8 @@ contract AnycallV7Config is IAnycallConfig {
         uint256 _flags,
         address[] calldata _whitelist
     ) external onlyAdmin {
-        require(bytes(_appID).length > 0, "empty appID");
-        require(_app != address(0), "zero app address");
+        require(bytes(_appID).length > 0);
+        require(_app != address(0));
 
         AppConfig storage config = appConfig[_appID];
         require(config.app == address(0), "app exist");
@@ -376,22 +352,18 @@ contract AnycallV7Config is IAnycallConfig {
     function updateAppConfig(
         address _app,
         address _admin,
-        uint256 _flags,
-        address[] calldata _whitelist
+        uint256 _flags
     ) external {
         string memory _appID = appIdentifier[_app];
         AppConfig storage config = appConfig[_appID];
 
-        require(config.app == _app && _app != address(0), "app not exist");
+        require(config.app == _app && _app != address(0), "no app");
         require(msg.sender == mpc || msg.sender == config.appAdmin, "forbid");
 
         if (_admin != address(0)) {
             config.appAdmin = _admin;
         }
         config.appFlags = _flags;
-        if (_whitelist.length > 0) {
-            _setAppWhitelist(_appID, _whitelist, true);
-        }
 
         emit SetAppConfig(_appID, _app, _admin, _flags);
     }
@@ -404,40 +376,39 @@ contract AnycallV7Config is IAnycallConfig {
         string memory _appID = appIdentifier[_oldApp];
         AppConfig storage config = appConfig[_appID];
 
-        require(
-            config.app == _oldApp && _oldApp != address(0),
-            "app not exist"
-        );
+        require(config.app == _oldApp && _oldApp != address(0), "no app");
         require(msg.sender == mpc || msg.sender == config.appAdmin, "forbid");
-        require(bytes(appIdentifier[_newApp]).length == 0, "new app is inited");
+        require(bytes(appIdentifier[_newApp]).length == 0, "inited");
 
         config.app = _newApp;
 
         emit UpgradeApp(_appID, _oldApp, _newApp);
     }
 
-    /// @notice Add whitelist
-    function addWhitelist(address _app, address[] memory _whitelist) external {
-        string memory _appID = appIdentifier[_app];
-        AppConfig storage config = appConfig[_appID];
-
-        require(config.app == _app && _app != address(0), "app not exist");
-        require(msg.sender == mpc || msg.sender == config.appAdmin, "forbid");
-
-        _setAppWhitelist(_appID, _whitelist, true);
+    /// @notice Set app blacklist in batch
+    function setBlacklists(string[] calldata _appIDs, bool _flag)
+        external
+        onlyAdmin
+    {
+        for (uint256 i = 0; i < _appIDs.length; i++) {
+            appBlacklist[_appIDs[i]] = _flag;
+        }
+        emit SetBlacklists(_appIDs, _flag);
     }
 
-    /// @notice Remove whitelist
-    function removeWhitelist(address _app, address[] memory _whitelist)
-        external
-    {
+    /// @notice Set app whitelist in batch
+    function setWhitelists(
+        address _app,
+        address[] memory _whitelist,
+        bool _flag
+    ) external {
         string memory _appID = appIdentifier[_app];
         AppConfig storage config = appConfig[_appID];
 
-        require(config.app == _app && _app != address(0), "app not exist");
+        require(config.app == _app && _app != address(0), "no app");
         require(msg.sender == mpc || msg.sender == config.appAdmin, "forbid");
 
-        _setAppWhitelist(_appID, _whitelist, false);
+        _setAppWhitelist(_appID, _whitelist, _flag);
     }
 
     function _setAppWhitelist(
@@ -446,60 +417,10 @@ contract AnycallV7Config is IAnycallConfig {
         bool _flag
     ) internal {
         mapping(address => bool) storage whitelist = appExecWhitelist[_appID];
-        address[] storage historyWhitelist = appHistoryWhitelist[_appID];
-        address addr;
         for (uint256 i = 0; i < _whitelist.length; i++) {
-            addr = _whitelist[i];
-            if (whitelist[addr] == _flag) {
-                continue;
-            }
-            if (_flag) {
-                historyWhitelist.push(addr);
-            }
-            whitelist[addr] = _flag;
-            emit SetWhitelist(_appID, addr, _flag);
+            whitelist[_whitelist[i]] = _flag;
         }
-    }
-
-    /// @notice Get history whitelist length
-    function getHistoryWhitelistLength(string memory _appID)
-        external
-        view
-        returns (uint256)
-    {
-        return appHistoryWhitelist[_appID].length;
-    }
-
-    /// @notice Get all history whitelist
-    function getAllHistoryWhitelist(string memory _appID)
-        external
-        view
-        returns (address[] memory)
-    {
-        return appHistoryWhitelist[_appID];
-    }
-
-    /// @notice Tidy history whitelist to be same with actual whitelist
-    function tidyHistoryWhitelist(string memory _appID) external {
-        mapping(address => bool) storage actualWhitelist = appExecWhitelist[
-            _appID
-        ];
-        address[] storage historyWhitelist = appHistoryWhitelist[_appID];
-        uint256 histLength = historyWhitelist.length;
-        uint256 popIndex = histLength;
-        address addr;
-        for (uint256 i = 0; i < popIndex; ) {
-            addr = historyWhitelist[i];
-            if (actualWhitelist[addr]) {
-                i++;
-            } else {
-                popIndex--;
-                historyWhitelist[i] = historyWhitelist[popIndex];
-            }
-        }
-        for (uint256 i = popIndex; i < histLength; i++) {
-            historyWhitelist.pop();
-        }
+        emit SetWhitelists(_appID, _whitelist, _flag);
     }
 
     /// @notice Set default src fees
@@ -529,7 +450,7 @@ contract AnycallV7Config is IAnycallConfig {
         string memory _appID = appIdentifier[_app];
         AppConfig storage config = appConfig[_appID];
 
-        require(config.app == _app && _app != address(0), "app not exist");
+        require(config.app == _app && _app != address(0), "no app");
 
         uint256 length = _toChainIDs.length;
         require(length == _baseFees.length && length == _feesPerByte.length);
@@ -554,7 +475,7 @@ contract AnycallV7Config is IAnycallConfig {
     ) external onlyAdmin {
         string memory _appID = appIdentifier[_app];
         AppConfig storage config = appConfig[_appID];
-        require(config.app == _app && _app != address(0), "app not exist");
+        require(config.app == _app && _app != address(0), "no app");
 
         uint256 length = _toChainIDs.length;
         require(length == _appCustomModes.length);
