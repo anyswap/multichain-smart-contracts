@@ -33,35 +33,14 @@ npx hardhat flatten <contract-to-be-flatten> | sed '/SPDX-License-Identifier:/d'
 
 ## scripts
 
+The scripts includs deploying and testing related scripts.
+
+>Note: Adjust arguments before running
+
+```shell
+npx hardhat run scripts/encodeSushiCallData.js
+```
+
 ```shell
 npx hardhat run scripts/deploy-anycall-v7.js
-```
-
-## test
-
-### install test dependencies
-
-```shell
-1) npm install --save ethers
-2) npm install --save web3
-```
-
-### vi config/config.js
-
-```shell
-network: '',
-privateKey: ''
-```
-
-### if run ganache-cli
-
-```shell
-1) npm i ganache-cli
-2) ganache-cli
-```
-
-### start test
-
-```shell
-node test/SushiswapTradeProxy.js
 ```
