@@ -250,6 +250,12 @@ function anyCall(
 )
 ```
 
-### 7. anycall add a `string to` receiver
+### 7. add an overload anycall with a `string to` receiver
 
 reserved for non-evm supports.
+
+### 8. anycall is unlocked, allow call `anyCall` from `anyExecute`
+
+this is usable when the application want to callback
+to forward back the execution result, or call `anyCall` to
+continue a new cross-chain interaction.
