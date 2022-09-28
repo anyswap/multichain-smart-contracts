@@ -41,7 +41,7 @@ OK, now let's continue our deployment steps
 constructor(
     address _executor,
     address admin_,
-    bytes memory _data
+    bytes   _data
 )
 
 # _data is the input data of calling the following function `AnycallExecutorUpgradeable::initialize`
@@ -68,7 +68,7 @@ constructor(
 constructor(
     address _anycall,
     address admin_,
-    bytes memory _data
+    bytes   _data
 )
 
 # _data is the input data of calling the following function `AnyCallV7Upgradeable::initialize`
@@ -99,7 +99,37 @@ function initialize(
     function addSupportedCaller(address caller)
     ```
 
-### 5 the app contract setting
+### 5 deploy an example demo app contract (only for testing)
+
+deploy `AppDemo` in `app-examples/AppDemo.sol`
+
+```solidity
+# _callProxy is the `AnycallV7Proxy` contract deployed in step 3
+
+constructor(address _admin, address _callProxy)
+```
+
+call `AppDemo::setClientPeers` to set peers on supported chains
+
+```solidity
+function setClientPeers(
+    uint256[] _chainIds,
+    address[] _peers
+)
+```
+
+call `AppDemo::callout` to trigger a testing transaction
+
+```solidity
+function callout(
+    string  message,
+    address receiver,
+    uint256 toChainId,
+    uint256 flags
+)
+```
+
+## app contract implementation attentions
 
 This is dependent according to the concrete app implementation.
 
@@ -109,11 +139,11 @@ This is dependent according to the concrete app implementation.
 
    ```solidity
    function anyCall(
-        string calldata _to,
-        bytes calldata _data,
+        string  _to,
+        bytes   _data,
         uint256 _toChainID,
         uint256 _flags,
-        bytes calldata /*_extdata*/
+        bytes   _extdata
     )
     ```
 
@@ -221,7 +251,7 @@ FLAG_PAY_FEE_ON_SRC     = 2;
 ```solidity
 function anyCall(
     address _to,
-    bytes calldata _data,
+    bytes   _data,
     address _fallback,
     uint256 _toChainID,
     uint256 _flags
@@ -243,10 +273,10 @@ if `FLAG_ALLOW_FALLBACK` is set, then allow fallback, otherwise disallow fallbac
 ```solidity
 function anyCall(
     address _to,
-    bytes calldata _data,
+    bytes   _data,
     uint256 _toChainID,
     uint256 _flags,
-    bytes calldata _extdata /*reserved*/
+    bytes   _extdata /*reserved*/
 )
 ```
 
