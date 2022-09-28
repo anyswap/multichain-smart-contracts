@@ -6,6 +6,8 @@ pragma solidity ^0.8.10;
 interface IAnycallProxy {
     function executor() external view returns (address);
 
+    function config() external view returns (address);
+
     function anyCall(
         address _to,
         bytes calldata _data,

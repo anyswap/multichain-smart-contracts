@@ -3,8 +3,9 @@
 pragma solidity ^0.8.10;
 
 import "./interfaces/IAnycallConfig.sol";
+import "./interfaces/IFeePool.sol";
 
-contract AnycallV7Config is IAnycallConfig {
+contract AnycallV7Config is IAnycallConfig, IFeePool {
     // Packed fee information (only 1 storage slot)
     struct FeeData {
         uint128 accruedFees;

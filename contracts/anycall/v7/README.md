@@ -111,6 +111,8 @@ constructor(address _admin, address _callProxy)
 
 call `AppDemo::setClientPeers` to set peers on supported chains
 
+>Note: we must call setClientPeers on all the supported chains (connect each other)
+
 ```solidity
 function setClientPeers(
     uint256[] _chainIds,
@@ -231,9 +233,20 @@ in anycall v7 version, defaults to `pay fee on source chain`
 
 ### 5. if choose `pay fee on destination chain`, the deposit/withdraw pool is changed
 
-in anycall v6 version, the deposit/withdraw pool is `AnyCallV6Proxy` contract address
+in anycall v6 version, the deposit/withdraw pool is `AnyCallV6Proxy` contract address.
+the fee is charged from address of `the app contract address on the source chain`
 
-in anycall v7 version, the deposit/withdraw pool is `AnycallV7Config` contract address
+in anycall v7 version, the deposit/withdraw pool is `AnycallV7Config` contract address.
+the fee is charged from address of `the app contract address on the destination chain` (because we may have multiple source chains)
+
+>Note: the app must check the peer and context are right!
+>
+>ref. `_getAndCheckPeer` and `_getAndCheckContext` in `app-examples/AppBase.sol`
+>
+> if the app want to support `pay fee on destination chain`,
+> the app is suggest to wrapper the interface `IFeePool` functions.
+>
+>ref. `depositFee` and `withdrawFee` in `app-examples/AppBase.sol`
 
 ### 6. AnyCallV6Proxy::anyCall function prototype is changed
 

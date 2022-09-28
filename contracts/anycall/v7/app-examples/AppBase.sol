@@ -5,36 +5,37 @@ pragma solidity ^0.8.10;
 import "../../../access/AdminControl.sol";
 import "../interfaces/IAnycallProxy.sol";
 import "../interfaces/IAnycallExecutor.sol";
+import "../interfaces/IFeePool.sol";
 
 abstract contract AppBase is AdminControl {
     address public callProxy;
-    address public executor;
 
     // associated client app on each chain
     mapping(uint256 => address) public clientPeers; // key is chainId
 
     modifier onlyExecutor() {
-        require(msg.sender == executor, "AppBase: onlyExecutor");
+        require(
+            msg.sender == IAnycallProxy(callProxy).executor(),
+            "AppBase: onlyExecutor"
+        );
         _;
     }
 
     constructor(address _admin, address _callProxy) AdminControl(_admin) {
         require(_callProxy != address(0));
         callProxy = _callProxy;
-        executor = IAnycallProxy(callProxy).executor();
     }
 
     receive() external payable {
         require(
             msg.sender == callProxy,
-            "AppBase: receive from forbidden sender"
+            "AppBase: only receive from callProxy"
         );
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
         require(_callProxy != address(0));
         callProxy = _callProxy;
-        executor = IAnycallProxy(callProxy).executor();
     }
 
     function setClientPeers(
@@ -62,7 +63,37 @@ abstract contract AppBase is AdminControl {
             uint256 nonce
         )
     {
-        (from, fromChainId, nonce) = IAnycallExecutor(executor).context();
+        address _executor = IAnycallProxy(callProxy).executor();
+        (from, fromChainId, nonce) = IAnycallExecutor(_executor).context();
         require(clientPeers[fromChainId] == from, "AppBase: wrong context");
+    }
+
+    // if the app want to support `pay fee on destination chain`,
+    // we'd better wrapper the interface `IFeePool` functions here.
+
+    function depositFee(address _account) external payable {
+        address _pool = IAnycallProxy(callProxy).config();
+        IFeePool(_pool).deposit{value: msg.value}(_account);
+    }
+
+    function withdrawFee(address _to, uint256 _amount) external onlyAdmin {
+        address _pool = IAnycallProxy(callProxy).config();
+        IFeePool(_pool).withdraw(_amount);
+
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success);
+    }
+
+    function withdrawAllFee(address _pool, address _to) external onlyAdmin {
+        uint256 _amount = IFeePool(_pool).executionBudget(address(this));
+        IFeePool(_pool).withdraw(_amount);
+
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success);
+    }
+
+    function executionBudget() external view returns (uint256) {
+        address _pool = IAnycallProxy(callProxy).config();
+        return IFeePool(_pool).executionBudget(address(this));
     }
 }
