@@ -28,7 +28,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
     }
 
     // anycall version
-    string constant ANYCALL_VERSION = "v7.0";
+    string public constant ANYCALL_VERSION = "v7.0";
 
     // Flags constant
     uint256 public constant FLAG_MERGE_CONFIG_FLAGS = 0x1;
@@ -53,9 +53,9 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
     mapping(bytes32 => bool) public execCompleted;
     uint256 nonce;
 
-    uint256 private unlocked = 1;
+    uint256 private unlocked;
     modifier lock() {
-        require(unlocked == 1);
+        require(unlocked == 1, "locked");
         unlocked = 0;
         _;
         unlocked = 1;
@@ -133,6 +133,8 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         address _config
     ) external initializer {
         require(_mpc != address(0), "zero mpc address");
+
+        unlocked = 1;
 
         admin = _admin;
         mpc = _mpc;

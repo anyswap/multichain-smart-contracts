@@ -13,7 +13,7 @@ async function main() {
 
 	console.log("Account balance:", (await deployer.getBalance()).toString());
 
-	console.log("\n##### Step 1: deploy AnycallExecutorProxy")
+	console.log("\n##### Step 1: deploy AnycallExecutorProxy");
 
 	const AnycallExecutorUpgradeable = await ethers.getContractFactory("AnycallExecutorUpgradeable");
 	const anycallExecutorUpgradeable = await AnycallExecutorUpgradeable.deploy();
@@ -40,7 +40,7 @@ async function main() {
 	console.log("AnycallExecutorProxy deployed at:", anycallExecutorProxy.address);
 
 
-	console.log("\n##### Step 2: deploy AnycallV7Config")
+	console.log("\n##### Step 2: deploy AnycallV7Config");
 
 	// PERMISSIONLESS_MODE = 1; FREE_MODE = 2;
 	const mode = 3;
@@ -53,7 +53,7 @@ async function main() {
 	const anycallV7Config = await AnycallV7Config.deploy(deployer.address, mpc.address, premium, mode);
 	console.log("AnycallV7Config deployed at:", anycallV7Config.address);
 
-	console.log("\n##### Step 3: deploy AnycallV7Proxy")
+	console.log("\n##### Step 3: deploy AnycallV7Proxy");
 
 	const AnyCallV7Upgradeable = await ethers.getContractFactory("AnyCallV7Upgradeable");
 	const anyCallV7Upgradeable = await AnyCallV7Upgradeable.deploy();
@@ -74,7 +74,7 @@ async function main() {
 	const anycallV7Proxy = await AnycallV7Proxy.deploy(anyCallV7Upgradeable.address, proxyAdmin.address, anycallProxyInitData);
 	console.log("AnycallV7Proxy deployed at:", anycallV7Proxy.address);
 
-	console.log("\n##### Step 4: set associations")
+	console.log("\n##### Step 4: set associations");
 
 	// call `AnycallV7Config::initAnycallContract`
 	await anycallV7Config.initAnycallContract(anycallV7Proxy.address);
@@ -86,10 +86,11 @@ async function main() {
 		ethers.utils.defaultAbiCoder.encode(
 			["address"], [anycallV7Proxy.address])
 	]);
-	await deployer.sendTransaction({
+	const addSupportedCallerTx = await deployer.sendTransaction({
 		to: anycallExecutorProxy.address,
 		data: inputData
-	})
+	});
+	await addSupportedCallerTx.wait();
 	console.log("call AnycallExecutorProxy::addSupportedCaller:",
 		ethers.utils.defaultAbiCoder.decode(["address[]"],
 			await ethers.provider.call({
@@ -98,7 +99,7 @@ async function main() {
 			})
 		));
 
-	console.log("\n##### Step 5: deploy AppDemo")
+	console.log("\n##### Step 5: deploy AppDemo");
 
 	console.log(
 		"AppDemo constructor paramters:",
@@ -128,8 +129,40 @@ async function main() {
 		22222,
 		4
 	);
-	const calloutTxReceipt = await calloutTx.wait()
-	console.log("callout tx logs are:", calloutTxReceipt.logs)
+	const calloutTxReceipt = await calloutTx.wait();
+	console.log("callout tx logs are:", calloutTxReceipt.logs);
+
+	const calloutTxHash = calloutTxReceipt.logs[1].transactionHash;
+
+	const callData = calloutTxReceipt.logs[1].data;
+	console.log("call data is:", callData);
+
+	const anyExecuteInputData = ethers.utils.hexConcat([
+		"0xd7328bad",
+		ethers.utils.defaultAbiCoder.encode(
+			["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
+			[
+				appDemo.address,
+				callData,
+				"",
+				calloutTxHash,
+				appDemo.address,
+				11111,
+				1,
+				4,
+				"0x"
+			])
+	]);
+
+	console.log("call anyExecute with input data:", anyExecuteInputData);
+
+	const anyExecuteTx = await mpc.sendTransaction({
+		to: anycallV7Proxy.address,
+		data: anyExecuteInputData
+	});
+
+	const anyExecuteTxReceipt = await anyExecuteTx.wait();
+	console.log("anyExecute tx logs are:", anyExecuteTxReceipt.logs);
 }
 
 main()
