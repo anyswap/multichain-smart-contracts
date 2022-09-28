@@ -275,7 +275,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         virtual
         lock
         whenNotPaused
-        chargeDestFee(_ctx.from, _ctx.flags)
+        chargeDestFee(_to, _ctx.flags)
         onlyMPC
     {
         IAnycallConfig(config).checkExec(_appID, _ctx.from, _to);
