@@ -6,6 +6,7 @@ import "../../common/Initializable.sol";
 import "./interfaces/IAnycallExecutor.sol";
 import "./interfaces/IAnycallConfig.sol";
 import "./interfaces/IAnycallProxy.sol";
+import "./interfaces/AnycallFlags.sol";
 
 /// anycall proxy is a universal protocal to complete cross-chain interaction.
 /// 1. the client call `AnycallV7Proxy::anyCall`
@@ -29,11 +30,6 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
 
     // anycall version
     string public constant ANYCALL_VERSION = "v7.0";
-
-    // Flags constant
-    uint256 public constant FLAG_MERGE_CONFIG_FLAGS = 0x1;
-    uint256 public constant FLAG_PAY_FEE_ON_DEST = 0x1 << 1;
-    uint256 public constant FLAG_ALLOW_FALLBACK = 0x1 << 2;
 
     address public admin;
     address public mpc;
@@ -165,7 +161,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
     /// @dev Charge an account for execution costs on this chain
     /// @param _from The account to charge for execution costs
     modifier chargeDestFee(address _from, uint256 _flags) {
-        if (_isSet(_flags, FLAG_PAY_FEE_ON_DEST)) {
+        if (_isSet(_flags, AnycallFlags.FLAG_PAY_FEE_ON_DEST)) {
             uint256 _prevGasLeft = gasleft();
             _;
             IAnycallConfig(config).chargeFeeOnDestChain(_from, _prevGasLeft);
@@ -294,7 +290,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         execCompleted[uniqID] = true;
 
         if (!success) {
-            if (_isSet(_ctx.flags, FLAG_ALLOW_FALLBACK)) {
+            if (_isSet(_ctx.flags, AnycallFlags.FLAG_ALLOW_FALLBACK)) {
                 // Call the fallback on the originating chain
                 nonce++;
                 string memory appID = _appID; // fix Stack too deep
@@ -303,7 +299,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
                     _ctx.from,
                     _data,
                     _ctx.fromChainID,
-                    FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
+                    AnycallFlags.FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
                     appID,
                     nonce,
                     abi.encode(true) // indicate to exec anyFallback

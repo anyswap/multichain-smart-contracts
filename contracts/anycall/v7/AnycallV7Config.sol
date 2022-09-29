@@ -4,6 +4,7 @@ pragma solidity ^0.8.10;
 
 import "./interfaces/IAnycallConfig.sol";
 import "./interfaces/IFeePool.sol";
+import "./interfaces/AnycallFlags.sol";
 
 contract AnycallV7Config is IAnycallConfig, IFeePool {
     // Packed fee information (only 1 storage slot)
@@ -24,10 +25,6 @@ contract AnycallV7Config is IAnycallConfig, IFeePool {
         uint256 baseFees;
         uint256 feesPerByte;
     }
-
-    // Flags constant
-    uint256 public constant FLAG_MERGE_CONFIG_FLAGS = 0x1;
-    uint256 public constant FLAG_PAY_FEE_ON_DEST = 0x1 << 1;
 
     // App Modes constant
     uint256 public constant APPMODE_USE_CUSTOM_SRC_FEES = 0x1;
@@ -164,12 +161,13 @@ contract AnycallV7Config is IAnycallConfig, IFeePool {
             );
 
             if (
-                _isSet(_flags, FLAG_MERGE_CONFIG_FLAGS) && config.app == _sender
+                _isSet(_flags, AnycallFlags.FLAG_MERGE_CONFIG_FLAGS) &&
+                config.app == _sender
             ) {
                 _flags |= config.appFlags;
             }
 
-            if (!_isSet(_flags, FLAG_PAY_FEE_ON_DEST)) {
+            if (!_isSet(_flags, AnycallFlags.FLAG_PAY_FEE_ON_DEST)) {
                 _srcFees = _calcSrcFees(_appID, _toChainID, _data.length);
             }
         }
