@@ -26,11 +26,11 @@ abstract contract AppBase is AdminControl {
         callProxy = _callProxy;
     }
 
-    receive() external payable {
-        require(
-            msg.sender == callProxy,
-            "AppBase: only receive from callProxy"
-        );
+    receive() external payable {}
+
+    function withdraw(address _to, uint256 _amount) external onlyAdmin {
+        (bool success, ) = _to.call{value: _amount}("");
+        require(success);
     }
 
     function setCallProxy(address _callProxy) external onlyAdmin {
@@ -71,9 +71,9 @@ abstract contract AppBase is AdminControl {
     // if the app want to support `pay fee on destination chain`,
     // we'd better wrapper the interface `IFeePool` functions here.
 
-    function depositFee(address _account) external payable {
+    function depositFee() external payable {
         address _pool = IAnycallProxy(callProxy).config();
-        IFeePool(_pool).deposit{value: msg.value}(_account);
+        IFeePool(_pool).deposit{value: msg.value}(address(this));
     }
 
     function withdrawFee(address _to, uint256 _amount) external onlyAdmin {

@@ -117,52 +117,203 @@ async function main() {
 		[appDemo.address, appDemo.address]
 	);
 
-	console.log("call AppDemo::callout",
-		"hello",
-		"0x1111111111111111111111111111111111111111",
-		22222,
-		4
-	);
-	const calloutTx = await appDemo.callout(
-		"hello",
-		"0x1111111111111111111111111111111111111111",
-		22222,
-		4
-	);
-	const calloutTxReceipt = await calloutTx.wait();
-	console.log("callout tx logs are:", calloutTxReceipt.logs);
+	{
+		// normal case
+		console.log("call AppDemo::callout",
+			"hello",
+			"0x1111111111111111111111111111111111111111",
+			22222,
+			4
+		);
+		const calloutTx = await appDemo.callout(
+			"hello",
+			"0x1111111111111111111111111111111111111111",
+			22222,
+			4
+		);
+		const calloutTxReceipt = await calloutTx.wait();
+		console.log("callout tx (normal) logs are:", calloutTxReceipt.logs);
 
-	const calloutTxHash = calloutTxReceipt.logs[1].transactionHash;
+		const calloutTxHash = calloutTxReceipt.logs[1].transactionHash;
 
-	const callData = calloutTxReceipt.logs[1].data;
-	console.log("call data is:", callData);
+		const callData = calloutTxReceipt.logs[1].data;
+		console.log("call data is:", callData);
 
-	const anyExecuteInputData = ethers.utils.hexConcat([
-		"0xd7328bad",
-		ethers.utils.defaultAbiCoder.encode(
-			["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
-			[
-				appDemo.address,
-				callData,
-				"",
-				calloutTxHash,
-				appDemo.address,
-				11111,
-				1,
-				4,
-				"0x"
-			])
-	]);
+		const anyExecuteInputData = ethers.utils.hexConcat([
+			"0xd7328bad",
+			ethers.utils.defaultAbiCoder.encode(
+				["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
+				[
+					appDemo.address,
+					callData,
+					"",
+					calloutTxHash,
+					appDemo.address,
+					11111,
+					1,
+					4,
+					"0x"
+				])
+		]);
 
-	console.log("call anyExecute with input data:", anyExecuteInputData);
+		console.log("call anyExecute with input data:", anyExecuteInputData);
 
-	const anyExecuteTx = await mpc.sendTransaction({
-		to: anycallV7Proxy.address,
-		data: anyExecuteInputData
-	});
+		const anyExecuteTx = await mpc.sendTransaction({
+			to: anycallV7Proxy.address,
+			data: anyExecuteInputData
+		});
 
-	const anyExecuteTxReceipt = await anyExecuteTx.wait();
-	console.log("anyExecute tx logs are:", anyExecuteTxReceipt.logs);
+		const anyExecuteTxReceipt = await anyExecuteTx.wait();
+		console.log("anyExecute tx (normal) logs are:", anyExecuteTxReceipt.logs);
+	}
+
+	{
+		// fallback case
+		console.log("call AppDemo::callout",
+			"hello world",
+			"0x1111111111111111111111111111111111111111",
+			22222,
+			4
+		);
+		const calloutTx = await appDemo.callout(
+			"hello world",
+			"0x1111111111111111111111111111111111111111",
+			22222,
+			4
+		);
+		const calloutTxReceipt = await calloutTx.wait();
+		console.log("callout tx (fallback) logs are:", calloutTxReceipt.logs);
+
+		const calloutTxHash = calloutTxReceipt.logs[1].transactionHash;
+
+		const callData = calloutTxReceipt.logs[1].data;
+		console.log("call data is:", callData);
+
+		const anyExecuteInputData = ethers.utils.hexConcat([
+			"0xd7328bad",
+			ethers.utils.defaultAbiCoder.encode(
+				["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
+				[
+					appDemo.address,
+					callData,
+					"",
+					calloutTxHash,
+					appDemo.address,
+					11111,
+					1,
+					4,
+					"0x"
+				])
+		]);
+
+		console.log("call anyExecute with input data:", anyExecuteInputData);
+
+		const anyExecuteTx = await mpc.sendTransaction({
+			to: anycallV7Proxy.address,
+			data: anyExecuteInputData
+		});
+
+		const anyExecuteTxReceipt = await anyExecuteTx.wait();
+		console.log("anyExecute tx (fallback) logs are:", anyExecuteTxReceipt.logs);
+
+		console.log("exec fallback with budget")
+		const depositFeeTx = await appDemo.depositFee({
+			value: ethers.utils.parseEther("1.0")
+		});
+		await depositFeeTx.wait();
+		console.log("budget is", await appDemo.executionBudget());
+
+		const execTxHash = anyExecuteTxReceipt.logs[1].transactionHash;
+
+		const execLogData = anyExecuteTxReceipt.logs[1].data;
+
+		const decodedData = ethers.utils.defaultAbiCoder.decode(
+			["address", "bytes", "uint256", "uint256", "string", "uint256", "bytes"],
+			execLogData
+		);
+
+		const fallbackCallData = decodedData[1];
+		const fallbackExtData = decodedData[6];
+		console.log("exec fallback call data is:", fallbackCallData);
+		console.log("exec fallback call ext data is:", fallbackExtData);
+
+		const execFallbackInputData = ethers.utils.hexConcat([
+			"0xd7328bad",
+			ethers.utils.defaultAbiCoder.encode(
+				["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
+				[
+					appDemo.address,
+					fallbackCallData,
+					"",
+					execTxHash,
+					appDemo.address,
+					22222,
+					1,
+					2,
+					fallbackExtData
+				])
+		]);
+
+		console.log("exec fallback call anyExecute with input data:", execFallbackInputData);
+
+		const execFallbackTx = await mpc.sendTransaction({
+			to: anycallV7Proxy.address,
+			data: execFallbackInputData
+		});
+
+		const execFallbackTxReceipt = await execFallbackTx.wait();
+		console.log("anyExecute tx (exec fallback) logs are:", execFallbackTxReceipt.logs);
+	}
+
+	{
+		// callback case
+		const calloutTx = await appDemo.callout(
+			"h",
+			"0x1111111111111111111111111111111111111111",
+			22222,
+			4
+		);
+		const calloutTxReceipt = await calloutTx.wait();
+		console.log("callout tx (callback) logs are:", calloutTxReceipt.logs);
+
+		const prepareGasFeeTx = await deployer.sendTransaction({
+			to: appDemo.address,
+			value: ethers.utils.parseEther("0.5")
+		});
+		await prepareGasFeeTx.wait();
+
+		const calloutTxHash = calloutTxReceipt.logs[1].transactionHash;
+
+		const callData = calloutTxReceipt.logs[1].data;
+		console.log("call data is:", callData);
+
+		const anyExecuteInputData = ethers.utils.hexConcat([
+			"0xd7328bad",
+			ethers.utils.defaultAbiCoder.encode(
+				["address", "bytes", "string", "bytes32", "address", "uint256", "uint256", "uint256", "bytes"],
+				[
+					appDemo.address,
+					callData,
+					"",
+					calloutTxHash,
+					appDemo.address,
+					11111,
+					1,
+					4,
+					"0x"
+				])
+		]);
+
+		console.log("call anyExecute with input data:", anyExecuteInputData);
+
+		const anyExecuteTx = await mpc.sendTransaction({
+			to: anycallV7Proxy.address,
+			data: anyExecuteInputData
+		});
+
+		const anyExecuteTxReceipt = await anyExecuteTx.wait();
+		console.log("anyExecute tx (callback) logs are:", anyExecuteTxReceipt.logs);
+	}
 }
 
 main()

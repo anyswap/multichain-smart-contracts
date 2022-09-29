@@ -3,6 +3,7 @@
 pragma solidity ^0.8.10;
 
 import "../interfaces/IApp.sol";
+import "../interfaces/AnycallFlags.sol";
 import "./AppBase.sol";
 
 contract AppDemo is IApp, AppBase {
@@ -90,6 +91,27 @@ contract AppDemo is IApp, AppBase {
 
         // Testing: add a condition of execute failure situation here to test fallbak function
         require(bytes(message).length < 10, "App: message too long");
+
+        // Testing: add a contition to trigger callback to the originating chain
+        if (bytes(message).length == 1) {
+            address clientPeer = _getAndCheckPeer(fromChainId);
+            string memory callbcakMessage = "received";
+            bytes memory callbackData = abi.encode(
+                callbcakMessage,
+                receiver,
+                sender,
+                fromChainId
+            );
+            // we choose pay fee on source here as an example (not set `FLAG_PAY_FEE_ON_DEST`)
+            // we should send some gas fees to this contract to use here
+            IAnycallProxy(callProxy).anyCall{value: 1e14}(
+                clientPeer,
+                callbackData,
+                fromChainId,
+                AnycallFlags.FLAG_NONE,
+                ""
+            );
+        }
 
         emit LogCallin(message, sender, receiver, fromChainId);
         return (true, "");
