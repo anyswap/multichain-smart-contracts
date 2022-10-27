@@ -4,7 +4,6 @@ pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./AnycallProxyBase.sol";
-import "../interfaces/ILocalAsset.sol";
 import "../interfaces/Xtokens.sol";
 
 contract AnycallProxy_XcmTransfer is AnycallProxyBase {
@@ -28,6 +27,7 @@ contract AnycallProxy_XcmTransfer is AnycallProxyBase {
     }
 
     struct AnycallInfo {
+        address token;
         uint256 amount;
         Xtokens.Multilocation destination;
         uint64 weight;
@@ -52,12 +52,12 @@ contract AnycallProxy_XcmTransfer is AnycallProxyBase {
     // impl `IAnycallProxy` interface
     // Note: take care of the situation when do the business failed.
     function exec(
-        address token,
+        address _token,
         address _receiver,
         uint256 amount,
         bytes calldata data
     ) external onlyAuth returns (bool success, bytes memory result) {
-        try this.execXcmTransfer(token, amount, data) returns (
+        try this.execXcmTransfer(amount, data) returns (
             bool succ,
             bytes memory res
         ) {
@@ -73,18 +73,15 @@ contract AnycallProxy_XcmTransfer is AnycallProxyBase {
     }
 
     function execXcmTransfer(
-        address token,
         uint256 amount,
         bytes calldata data
     ) external returns (bool success, bytes memory result) {
         require(msg.sender == address(this));
 
         AnycallInfo memory anycallInfo = decode_anycall_info(data);
+        address token = anycallInfo.token;
         Xtokens.Multilocation memory destination = anycallInfo.destination;
         uint64 weight = anycallInfo.weight;
-
-        ILocalAsset localAsset = ILocalAsset(token);
-        localAsset.mint(address(this), amount);
 
         xTokens.transfer(
             token,

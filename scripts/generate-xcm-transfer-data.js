@@ -1,4 +1,5 @@
 async function main() {
+    const xc20TokenAddress = '0xfffffffe47b78475160da680caef70959e027bee';
     const transferAmount = '100000000000000000000'; // 100 xcBNB
     const weight = 1000000000; // there may be different values for different parachains
     const parachainId = '0x00000007DB'; // Equilibrium Parachain
@@ -8,8 +9,8 @@ async function main() {
     const formattedRecipient = "0x01" + recipientAddress + "00";
     const interior = [parachainId, formattedRecipient];
 
-    const dataPassedToDest = ethers.utils.defaultAbiCoder.encode(["tuple(uint256, tuple(uint8,bytes[]),uint64)"],
-        [[transferAmount, [parents, interior], weight]]);
+    const dataPassedToDest = ethers.utils.defaultAbiCoder.encode(["tuple(address,uint256, tuple(uint8,bytes[]),uint64)"],
+        [[xc20TokenAddress, transferAmount, [parents, interior], weight]]);
     console.log(`dataPassedToDest: ${dataPassedToDest}`)
 }
 
