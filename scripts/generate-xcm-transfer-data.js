@@ -1,16 +1,16 @@
 async function main() {
-    const xc20TokenAddress = '0xfffffffe47b78475160da680caef70959e027bee';
-    const transferAmount = '100000000000000000000'; // 100 xcBNB
-    const weight = 1000000000; // there may be different values for different parachains
+    const parents = 1; // Up to relay-chain (Polkadot/Kusama chain)
+
     const parachainId = '0x00000007DB'; // Equilibrium Parachain
     const recipientAddress = "4829b1e41449bd2cc7f04df856052f4d439f2f3e7f346c9702b94928ddf04707"; // Public key format
-    const parents = 1; // Up to relay-chain (Polkadot/Kusama chain)
     // Format: 0x01 + AccountId32 + 00 (https://docs.moonbeam.network/builders/xcm/xc20/xtokens/ -> "The X-Tokens Solidity Interface")
     const formattedRecipient = "0x01" + recipientAddress + "00";
     const interior = [parachainId, formattedRecipient];
 
-    const dataPassedToDest = ethers.utils.defaultAbiCoder.encode(["tuple(address,uint256, tuple(uint8,bytes[]),uint64)"],
-        [[xc20TokenAddress, transferAmount, [parents, interior], weight]]);
+    const weight = 4000000; // there may be different values for different parachains
+
+    const dataPassedToDest = ethers.utils.defaultAbiCoder.encode(["tuple(tuple(uint8,bytes[]),uint64)"],
+        [[ [parents, interior], weight]]);
     console.log(`dataPassedToDest: ${dataPassedToDest}`)
 }
 
