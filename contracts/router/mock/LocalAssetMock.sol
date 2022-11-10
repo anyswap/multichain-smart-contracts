@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
-import "./interfaces/ILocalAsset.sol";
+import "../interfaces/ILocalAsset.sol";
 
 /**
  * @title Extension of the ERC20 interface that allows an owner
