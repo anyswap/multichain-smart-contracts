@@ -39,22 +39,29 @@ interface ITokenMintBurn {
     function burn(address _who, uint256 _value) external;
 }
 
+interface ITokenWrapper {
+    function token() external view returns (address);
+}
+
 /*
  * There are three roles.
  * 1. operator: minter, burner
- * 3. contract admin: add/remove operator, callToken, setting limit
+ * 3. wrapper admin: add/remove operator, setting limit
  */
 contract MintBurnWrapperDailyLimit is IRouterMintBurn, AdminPausableControl {
     // pausable control roles
     bytes32 public constant PAUSE_MINT_ROLE = keccak256("PAUSE_MINT_ROLE");
     bytes32 public constant PAUSE_BURN_ROLE = keccak256("PAUSE_BURN_ROLE");
-    bytes32 public constant PAUSE_CALLTOKEN_ROLE =
-        keccak256("PAUSE_CALLTOKEN_ROLE");
 
     // the target token to be wrapped, must support `ITokenMintBurn`
     address public override token;
     // token type should be consistent with the `TokenType` context
     TokenType public constant override tokenType = TokenType.MintBurnAny;
+
+    // this is a wrapper of the underlying token,
+    // but it did not implement `interface IRouterMintBurn`,
+    // so we need to set this address and re-wrap it.
+    address public immutable tokenWrapper;
 
     mapping(address => bool) public operators;
 
@@ -100,12 +107,25 @@ contract MintBurnWrapperDailyLimit is IRouterMintBurn, AdminPausableControl {
         _;
     }
 
-    constructor(address _token, address _admin) AdminPausableControl(_admin) {
+    constructor(
+        address _token,
+        address _tokenWrapper,
+        address _admin
+    ) AdminPausableControl(_admin) {
         token = _token;
+        tokenWrapper = _tokenWrapper;
+        require(
+            tokenWrapper == address(0) ||
+                ITokenWrapper(tokenWrapper).token() == token,
+            "wrong token wrapper"
+        );
     }
 
     function minterBurner() internal view returns (ITokenMintBurn) {
-        return ITokenMintBurn(token);
+        if (tokenWrapper == address(0)) {
+            return ITokenMintBurn(token);
+        }
+        return ITokenMintBurn(tokenWrapper);
     }
 
     // Owner function
@@ -118,18 +138,6 @@ contract MintBurnWrapperDailyLimit is IRouterMintBurn, AdminPausableControl {
     function removeOperator(address addr) external onlyAdmin {
         emit OperatorRemoved(addr);
         delete operators[addr];
-    }
-
-    function callToken(bytes calldata data)
-        external
-        payable
-        onlyAdmin
-        whenNotPaused(PAUSE_CALLTOKEN_ROLE)
-        returns (bool)
-    {
-        (bool success, ) = token.call{value: msg.value}(data);
-        require(success);
-        return true;
     }
 
     function setOperatorSupply(address addr, uint256 amount)
