@@ -7,7 +7,7 @@ async function main() {
     const formattedRecipient = "0x01" + recipientAddress + "00";
     const interior = [parachainId, formattedRecipient];
 
-    const weight = 4000000; // there may be different values for different parachains
+    const weight = 800_000_000; // there may be different values for different parachains
 
     const dataPassedToDest = ethers.utils.defaultAbiCoder.encode(["tuple(tuple(uint8,bytes[]),uint64)"],
         [[ [parents, interior], weight]]);
