@@ -3,7 +3,7 @@ const Ethers = require('ethers');
 const Helpers = require('../helpers');
 
 const XcmTransferProxyContract = artifacts.require("AnycallProxy_XcmTransfer");
-const XTokensMockContract = artifacts.require("XTokensMock");
+const xTokensMockContract = artifacts.require("xTokensMock");
 const ERC20MockContract = artifacts.require("ERC20Mock");
 
 contract('XcmTransferProxy - [exec]', async (accounts) => {
@@ -18,7 +18,7 @@ contract('XcmTransferProxy - [exec]', async (accounts) => {
     let xTokensMockInstance;
 
     beforeEach(async () => {
-        xTokensMockInstance = await XTokensMockContract.new();
+        xTokensMockInstance = await xTokensMockContract.new();
         XcmTransferProxyInstance = await XcmTransferProxyContract.new(mpc, caller, xTokensMockInstance.address);
         ERC20MockInstance = await ERC20MockContract.new("Test Token", "TTOKEN", caller, callerInitialBalance);
     });

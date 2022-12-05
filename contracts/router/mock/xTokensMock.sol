@@ -5,8 +5,8 @@ pragma solidity ^0.8.0;
 import "../interfaces/Xtokens.sol";
 import "./ERC20Mock.sol";
 
-contract XtokensMock is Xtokens{
-    event XTokensTransfer(
+contract xTokensMock is Xtokens{
+    event xTokensTransfer(
         address currency,
         uint256 amount,
         uint64 weight
@@ -27,7 +27,7 @@ contract XtokensMock is Xtokens{
     ) external {
         ERC20Mock tokenMock = ERC20Mock(currencyAddress);
         tokenMock.burn(msg.sender, amount);
-        emit XTokensTransfer(currencyAddress, amount, weight);
+        emit xTokensTransfer(currencyAddress, amount, weight);
     }
 
     /// Transfer a token through XCM based on its currencyId specifying fee

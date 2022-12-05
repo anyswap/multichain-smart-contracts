@@ -10,5 +10,5 @@ npm i truffle@5.1.61
 
 Run:
 ```bash
-truffle test test/contractBridge/admin.js
+truffle test tests/xcm-transfer-proxy/constructor.js
 ```
