@@ -191,15 +191,16 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         @param _data The calldata supplied for the interaction with `_to`
         @param _toChainID The target chain id to interact with
         @param _flags The flags of app on the originating chain
-        @dev `_extdata` The extension data for call context
+        @param _extdata The extension data for call context
     */
     function anyCall(
         address _to,
         bytes calldata _data,
         uint256 _toChainID,
         uint256 _flags,
-        bytes calldata /*_extdata*/
+        bytes calldata _extdata
     ) external payable virtual whenNotPaused {
+        require(_flags < AnycallFlags.FLAG_EXEC_START_VALUE, "invalid flags");
         (string memory _appID, uint256 _srcFees) = IAnycallConfig(config)
             .checkCall(msg.sender, _data, _toChainID, _flags);
 
@@ -214,7 +215,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
             _flags,
             _appID,
             nonce,
-            ""
+            _extdata
         );
     }
 
@@ -224,15 +225,16 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         @param _data The calldata supplied for the interaction with `_to`
         @param _toChainID The target chain id to interact with
         @param _flags The flags of app on the originating chain
-        @dev `_extdata` The extension data for call context
+        @param _extdata The extension data for call context
     */
     function anyCall(
         string calldata _to,
         bytes calldata _data,
         uint256 _toChainID,
         uint256 _flags,
-        bytes calldata /*_extdata*/
+        bytes calldata _extdata
     ) external payable virtual whenNotPaused {
+        require(_flags < AnycallFlags.FLAG_EXEC_START_VALUE, "invalid flags");
         (string memory _appID, uint256 _srcFees) = IAnycallConfig(config)
             .checkCall(msg.sender, _data, _toChainID, _flags);
 
@@ -247,7 +249,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
             _flags,
             _appID,
             nonce,
-            ""
+            _extdata
         );
     }
 
@@ -299,10 +301,10 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
                     _ctx.from,
                     _data,
                     _ctx.fromChainID,
-                    AnycallFlags.FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
+                    AnycallFlags.FLAG_EXEC_FALLBACK | AnycallFlags.FLAG_PAY_FEE_ON_DEST, // pay fee on dest chain
                     appID,
                     nonce,
-                    abi.encode(true) // indicate to exec anyFallback
+                    ""
                 );
             } else {
                 // Store retry record and emit a log
@@ -336,6 +338,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
                 _ctx.from,
                 _ctx.fromChainID,
                 _ctx.nonce,
+                _ctx.flags,
                 _extdata
             )
         returns (bool succ, bytes memory res) {
@@ -397,7 +400,7 @@ contract AnyCallV7Upgradeable is IAnycallProxy, Initializable {
         delete retryExecRecords[uniqID];
 
         (bool success, bytes memory result) = IAnycallExecutor(executor)
-            .execute(_to, _data, _from, _fromChainID, _nonce, "");
+            .execute(_to, _data, _from, _fromChainID, _nonce, AnycallFlags.FLAG_NONE, "");
         require(success, string(result));
 
         emit DoneRetryExecRecord(_txhash, _from, _fromChainID, _nonce);

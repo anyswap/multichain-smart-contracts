@@ -5,6 +5,7 @@ pragma solidity ^0.8.10;
 import "../../access/MPCAdminPausableControlUpgradeable.sol";
 import "./interfaces/IApp.sol";
 import "./interfaces/IAnycallExecutor.sol";
+import "./interfaces/AnycallFlags.sol";
 
 abstract contract RoleControl is MPCAdminPausableControlUpgradeable {
     mapping(address => bool) public isSupportedCaller;
@@ -65,7 +66,8 @@ contract AnycallExecutorUpgradeable is IAnycallExecutor, RoleControl {
         address _from,
         uint256 _fromChainID,
         uint256 _nonce,
-        bytes calldata _extdata
+        uint256 _flags,
+        bytes calldata /*_extdata*/
     )
         external
         virtual
@@ -74,7 +76,7 @@ contract AnycallExecutorUpgradeable is IAnycallExecutor, RoleControl {
         whenNotPaused(PAUSE_ALL_ROLE)
         returns (bool success, bytes memory result)
     {
-        bool isFallback = _extdata.length > 0 && abi.decode(_extdata, (bool));
+        bool isFallback = _isSet(_flags, AnycallFlags.FLAG_EXEC_FALLBACK);
 
         context = Context({
             from: _from,
@@ -89,5 +91,13 @@ contract AnycallExecutorUpgradeable is IAnycallExecutor, RoleControl {
         }
 
         context = Context({from: address(0), fromChainID: 0, nonce: 0});
+    }
+
+    function _isSet(uint256 _value, uint256 _testBits)
+        internal
+        pure
+        returns (bool)
+    {
+        return (_value & _testBits) == _testBits;
     }
 }

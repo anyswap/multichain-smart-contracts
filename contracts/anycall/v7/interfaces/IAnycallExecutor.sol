@@ -19,6 +19,7 @@ interface IAnycallExecutor {
         address _from,
         uint256 _fromChainID,
         uint256 _nonce,
+        uint256 _flags,
         bytes calldata _extdata
     ) external returns (bool success, bytes memory result);
 }
