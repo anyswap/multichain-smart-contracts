@@ -345,13 +345,26 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
             _ctx.nonce
         );
         require(!execCompleted[uniqID], "exec completed");
-
-        bytes32 proofID = keccak256(
-            abi.encode(_ctx.fromChainID, _ctx.txhash, _args.logindex)
-        );
-        require(!execCompleted[proofID], "proof comsumed");
+        execCompleted[uniqID] = true;
 
         {
+            RequestContext memory ctx = _ctx; // fix Stack too deep
+            bytes32 proofID = keccak256(
+                abi.encode(
+                    _args.to,
+                    _args.data,
+                    _args.extdata,
+                    _args.logindex,
+                    ctx.from,
+                    ctx.fromChainID,
+                    ctx.txhash,
+                    ctx.nonce,
+                    ctx.flags
+                )
+            );
+            require(!execCompleted[proofID], "proof comsumed");
+            execCompleted[proofID] = true;
+
             (bytes32 r, bytes32 s, uint8 v) = abi.decode(
                 _proof,
                 (bytes32, bytes32, uint8)
@@ -361,10 +374,6 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         }
 
         bool success = _execute(_args.to, _args.data, _ctx, _args.extdata);
-
-        // set exec completed (dont care success status)
-        execCompleted[uniqID] = true;
-        execCompleted[proofID] = true;
 
         if (!success) {
             if (_isSet(_ctx.flags, AnycallFlags.FLAG_ALLOW_FALLBACK)) {
