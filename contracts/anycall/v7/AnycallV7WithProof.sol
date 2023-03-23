@@ -88,6 +88,14 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         bytes result
     );
 
+    event LogAnyExecWithProof(
+        bytes32 proofID,
+        bytes32 txhash,
+        uint256 fromChainID,
+        uint256 nonce,
+        uint256 logindex
+    );
+
     event SetAdmin(address admin);
     event SetExecutor(address executor);
     event SetConfig(address config);
@@ -347,9 +355,10 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         require(!execCompleted[uniqID], "exec completed");
         execCompleted[uniqID] = true;
 
+        bytes32 proofID;
         {
             RequestContext memory ctx = _ctx; // fix Stack too deep
-            bytes32 proofID = keccak256(
+            proofID = keccak256(
                 abi.encode(
                     _args.to,
                     _args.data,
@@ -407,6 +416,14 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
                 );
             }
         }
+
+        emit LogAnyExecWithProof(
+            proofID,
+            _ctx.txhash,
+            _ctx.fromChainID,
+            _ctx.nonce,
+            _args.logindex
+        );
     }
 
     /// @notice execute through the executor (sandbox)
@@ -447,11 +464,10 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         );
     }
 
-    function _isSet(uint256 _value, uint256 _testBits)
-        internal
-        pure
-        returns (bool)
-    {
+    function _isSet(
+        uint256 _value,
+        uint256 _testBits
+    ) internal pure returns (bool) {
         return (_value & _testBits) == _testBits;
     }
 
