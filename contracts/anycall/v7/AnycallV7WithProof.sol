@@ -344,6 +344,7 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         RequestContext calldata _ctx,
         bytes calldata _proof
     ) external virtual lock whenNotPaused chargeDestFee(_args.to, _ctx.flags) {
+        require(_proof.length == 65, "wrong proof length");
         IAnycallConfig(config).checkExec(_args.appID, _ctx.from, _args.to);
 
         bytes32 uniqID = calcUniqID(
@@ -374,10 +375,9 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
             require(!execCompleted[proofID], "proof comsumed");
             execCompleted[proofID] = true;
 
-            (bytes32 r, bytes32 s, uint8 v) = abi.decode(
-                _proof,
-                (bytes32, bytes32, uint8)
-            );
+            bytes32 r = bytes32(_proof[0:32]);
+            bytes32 s = bytes32(_proof[32:64]);
+            uint8 v = uint8(_proof[64]);
             address signer = ecrecover(proofID, v, r, s);
             require(signer != address(0) && signer == mpc, "wrong proof");
         }
