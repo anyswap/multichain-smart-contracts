@@ -358,13 +358,15 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
 
         bytes32 proofID;
         {
+            ExecArgs memory args = _args; // fix Stack too deep
             RequestContext memory ctx = _ctx; // fix Stack too deep
             proofID = keccak256(
                 abi.encode(
-                    _args.to,
-                    _args.data,
-                    _args.extdata,
-                    _args.logindex,
+                    args.to,
+                    args.data,
+                    args.appID,
+                    args.extdata,
+                    args.logindex,
                     ctx.from,
                     ctx.fromChainID,
                     ctx.txhash,
