@@ -57,6 +57,8 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         unlocked = 1;
     }
 
+    mapping(address => bool) public isProofSigner;
+
     event LogAnyCall(
         address indexed from,
         address to,
@@ -126,6 +128,9 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         uint256 nonce
     );
 
+    event AddProofSigner(address signer);
+    event RemoveProofSigner(address signer);
+
     constructor() {
         _disableInitializers();
     }
@@ -144,6 +149,8 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
         mpc = _mpc;
         executor = _executor;
         config = _config;
+
+        isProofSigner[mpc] = true;
 
         emit ApplyMPC(address(0), _mpc, block.timestamp);
     }
@@ -381,7 +388,7 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
             bytes32 s = bytes32(_proof[32:64]);
             uint8 v = uint8(_proof[64]);
             address signer = ecrecover(proofID, v, r, s);
-            require(signer != address(0) && signer == mpc, "wrong proof");
+            require(signer != address(0) && isProofSigner[signer], "wrong proof");
         }
 
         bool success = _execute(_args.to, _args.data, _ctx, _args.extdata);
@@ -561,5 +568,26 @@ contract AnycallV7WithProof is IAnycallProxy, Initializable {
     function setRetryWithPermit(bool _flag) external onlyAdmin {
         retryWithPermit = _flag;
         emit SetRetryWithPermit(_flag);
+    }
+
+    /// @notice add proof signers
+    function addProofSigners(address[] calldata signers) external onlyMPC {
+        address _signer;
+        for (uint i = 0; i < signers.length; i++) {
+            _signer = signers[i];
+            require(_signer != address(0), "zero signer address");
+            isProofSigner[_signer] = true;
+            emit AddProofSigner(_signer);
+        }
+    }
+
+    /// @notice remove proof signers
+    function removeProofSigners(address[] calldata signers) external onlyMPC {
+        address _signer;
+        for (uint i = 0; i < signers.length; i++) {
+            _signer = signers[i];
+            isProofSigner[_signer] = false;
+            emit RemoveProofSigner(_signer);
+        }
     }
 }
