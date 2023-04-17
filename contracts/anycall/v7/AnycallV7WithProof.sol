@@ -6,6 +6,7 @@ import "./AnycallV7Upgradeable.sol";
 
 contract AnycallV7WithProof is AnyCallV7Upgradeable {
     mapping(address => bool) public isProofSigner;
+    address[] public proofSigners;
 
     event LogAnyExecWithProof(
         bytes32 proofID,
@@ -69,7 +70,10 @@ contract AnycallV7WithProof is AnyCallV7Upgradeable {
             bytes32 s = bytes32(_proof[32:64]);
             uint8 v = uint8(_proof[64]);
             address signer = ecrecover(proofID, v, r, s);
-            require(signer != address(0) && isProofSigner[signer], "wrong proof");
+            require(
+                signer != address(0) && isProofSigner[signer],
+                "wrong proof"
+            );
         }
 
         bool success = _execute(_args.to, _args.data, _ctx, _args.extdata);
@@ -116,13 +120,20 @@ contract AnycallV7WithProof is AnyCallV7Upgradeable {
         );
     }
 
+    /// @notice get all proof signers
+    function getAllProofSigners() external view returns (address[] memory) {
+        return proofSigners;
+    }
+
     /// @notice add proof signers
     function addProofSigners(address[] calldata signers) external onlyMPC {
         address _signer;
         for (uint i = 0; i < signers.length; i++) {
             _signer = signers[i];
             require(_signer != address(0), "zero signer address");
+            require(!isProofSigner[_signer], "signer already exist");
             isProofSigner[_signer] = true;
+            proofSigners.push(_signer);
             emit AddProofSigner(_signer);
         }
     }
@@ -132,8 +143,21 @@ contract AnycallV7WithProof is AnyCallV7Upgradeable {
         address _signer;
         for (uint i = 0; i < signers.length; i++) {
             _signer = signers[i];
+            require(isProofSigner[_signer], "signer not exist");
             isProofSigner[_signer] = false;
+            _popProofSigner(_signer);
             emit RemoveProofSigner(_signer);
         }
+    }
+
+    function _popProofSigner(address _signer) internal {
+        uint256 length = proofSigners.length;
+        for (uint256 i = 0; i < length - 1; i++) {
+            if (proofSigners[i] == _signer) {
+                proofSigners[i] = proofSigners[length - 1];
+                break;
+            }
+        }
+        proofSigners.pop();
     }
 }
